@@ -2,12 +2,12 @@
 
 import { useRef, useState } from "react"
 import {
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    View,
-    type NativeScrollEvent,
-    type NativeSyntheticEvent,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native"
 import ProductCard from "./ProductCard"
 

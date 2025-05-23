@@ -5,23 +5,27 @@ import { router } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { useState } from "react"
 import {
-    ActivityIndicator,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native"
+import CollectionToast from "../../components/CollectionToast"; // Import the CollectionToast component
 
 export default function AddCollectionScreen() {
   const [collectionName, setCollectionName] = useState("")
   const [coverImage, setCoverImage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Toast state
+  const [toastVisible, setToastVisible] = useState(false)
 
   // Predefined images for selection
   const predefinedImages = [
@@ -100,9 +104,15 @@ export default function AddCollectionScreen() {
     try {
       // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Navigate back to collections screen
-      router.push("/my-collections")
+      
+      // Show success toast
+      setToastVisible(true)
+      
+      // Navigate after a short delay to allow toast to be seen
+      setTimeout(() => {
+        router.push("/my-collections")
+      }, 1500)
+      
     } catch (error) {
       console.error("Error creating collection:", error)
       alert("Error al crear la colección. Inténtalo de nuevo.")
@@ -114,6 +124,16 @@ export default function AddCollectionScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
+
+      {/* Collection Toast */}
+      <CollectionToast
+        visible={toastVisible}
+        message="Tu colección ha sido creada exitosamente"
+        collectionName={collectionName}
+        collectionImage={coverImage || undefined}
+        onDismiss={() => setToastVisible(false)}
+        duration={3000}
+      />
 
       {/* Header */}
       <View style={styles.header}>
@@ -169,7 +189,10 @@ export default function AddCollectionScreen() {
 
             {/* Create Collection Button */}
             <TouchableOpacity
-              style={styles.createButton}
+              style={[
+                styles.createButton,
+                (!collectionName.trim() || !coverImage) && styles.createButtonDisabled
+              ]}
               onPress={createCollection}
               disabled={isLoading || !collectionName.trim() || !coverImage}
             >
@@ -237,7 +260,7 @@ const styles = StyleSheet.create({
   },
   imagePickerContainer: {
     borderWidth: 2,
-    borderColor: "#dadada",
+    borderColor: "#6c08dd",
     borderStyle: "dashed",
     borderRadius: 8,
     height: 180,
@@ -304,6 +327,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 24,
     marginBottom: 16,
+  },
+  createButtonDisabled: {
+    backgroundColor: "#b984f1", // Lighter purple for disabled state
+    opacity: 0.7,
   },
   createButtonText: {
     color: "#fff",

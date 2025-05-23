@@ -1,3 +1,4 @@
+import { router } from "expo-router"
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native"
 
 interface ProductCardProps {
@@ -8,8 +9,16 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ imageUri, title, brand, onPress }: ProductCardProps) {
+  const handlePress = () => {
+    if (onPress) {
+      onPress()
+    } else {
+      router.push("/product-browser")
+    }
+  }
+
   return (
-    <TouchableOpacity style={styles.productCard} onPress={onPress} activeOpacity={0.8}>
+    <TouchableOpacity style={styles.productCard} onPress={handlePress} activeOpacity={0.8}>
       <View style={styles.imageContainer}>
         <Image source={{ uri: imageUri }} style={styles.productImage} resizeMode="contain" />
       </View>

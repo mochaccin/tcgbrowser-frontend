@@ -11,42 +11,87 @@ export default function HomeScreen() {
   const bestSellersProducts = [
     {
       id: "1",
-      imageUri: "https://cdnx.jumpseller.com/geekers1/image/56447402/resize/610/610?1747538860",
-      title: "Pokemon Prismatic Evolutions",
-      brand: "Pokemon",
+      imageUri: "https://images.pokemontcg.io/sv4pt5/1.png",
+      title: "Charizard ex",
+      brand: "Prismatic Evolutions",
     },
     {
       id: "2",
-      imageUri: "https://cdnx.jumpseller.com/geekers1/image/56447402/resize/610/610?1747538860",
-      title: "Pokemon Prismatic Evolutions",
-      brand: "Pokemon",
+      imageUri: "https://images.pokemontcg.io/sv4pt5/6.png",
+      title: "Pikachu ex",
+      brand: "Prismatic Evolutions",
     },
     {
       id: "3",
-      imageUri: "https://cdnx.jumpseller.com/geekers1/image/56447402/resize/610/610?1747538860",
-      title: "Pokemon Prismatic Evolutions",
-      brand: "Pokemon",
+      imageUri: "https://images.pokemontcg.io/sv4pt5/9.png",
+      title: "Eevee",
+      brand: "Prismatic Evolutions",
+    },
+    {
+      id: "4",
+      imageUri: "https://images.pokemontcg.io/sv4pt5/26.png",
+      title: "Sylveon ex",
+      brand: "Prismatic Evolutions",
+    },
+    {
+      id: "5",
+      imageUri: "https://images.pokemontcg.io/swsh4/188.png",
+      title: "Pikachu VMAX",
+      brand: "Vivid Voltage",
     },
   ]
 
   const recentlySearchedProducts = [
     {
-      id: "4",
-      imageUri: "https://cdnx.jumpseller.com/geekers1/image/56447402/resize/610/610?1747538860",
-      title: "Pokemon Prismatic Evolutions",
-      brand: "Pokemon",
-    },
-    {
-      id: "5",
-      imageUri: "https://cdnx.jumpseller.com/geekers1/image/56447402/resize/610/610?1747538860",
-      title: "Pokemon Prismatic Evolutions",
-      brand: "Pokemon",
-    },
-    {
       id: "6",
-      imageUri: "https://cdnx.jumpseller.com/geekers1/image/56447402/resize/610/610?1747538860",
-      title: "Pokemon Prismatic Evolutions",
-      brand: "Pokemon",
+      imageUri: "https://images.pokemontcg.io/swsh7/215.png",
+      title: "Umbreon VMAX",
+      brand: "Evolving Skies",
+    },
+    {
+      id: "7",
+      imageUri: "https://images.pokemontcg.io/swsh5/110.png",
+      title: "Rayquaza ex",
+      brand: "Battle Styles",
+    },
+    {
+      id: "8",
+      imageUri: "https://images.pokemontcg.io/swsh8/151.png",
+      title: "Mew ex",
+      brand: "Fusion Strike",
+    },
+    {
+      id: "9",
+      imageUri: "https://images.pokemontcg.io/sv3/197.png",
+      title: "Charizard ex",
+      brand: "Obsidian Flames",
+    },
+    {
+      id: "10",
+      imageUri: "https://images.pokemontcg.io/sv2/193.png",
+      title: "Miraidon ex",
+      brand: "Paldea Evolved",
+    },
+  ]
+
+  const newReleasesProducts = [
+    {
+      id: "11",
+      imageUri: "https://images.pokemontcg.io/sv4pt5/1.png",
+      title: "Charizard ex Special",
+      brand: "Prismatic Evolutions",
+    },
+    {
+      id: "12",
+      imageUri: "https://images.pokemontcg.io/sv4pt5/6.png",
+      title: "Pikachu ex Rainbow",
+      brand: "Prismatic Evolutions",
+    },
+    {
+      id: "13",
+      imageUri: "https://images.pokemontcg.io/sv4pt5/9.png",
+      title: "Eevee Holo Rare",
+      brand: "Prismatic Evolutions",
     },
   ]
 
@@ -60,8 +105,8 @@ export default function HomeScreen() {
           <Feather name="menu" size={24} color="black" />
         </TouchableOpacity>
         <View style={styles.logoContainer}>
-          <Text style={styles.logoText}>TCG</Text>
-          <Text style={styles.browserText}>BROWSER</Text>
+          <Text style={styles.logoText}>POKEMON</Text>
+          <Text style={styles.browserText}>TCG</Text>
         </View>
         <View style={styles.headerIcons}>
           <TouchableOpacity style={styles.iconButton} onPress={() => router.push("/profile")}>
@@ -75,77 +120,65 @@ export default function HomeScreen() {
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <TextInput style={styles.searchInput} placeholder="Busca tu carta" placeholderTextColor="#999" />
+        <TextInput style={styles.searchInput} placeholder="Busca tu carta Pokemon" placeholderTextColor="#999" />
         <TouchableOpacity style={styles.searchButton}>
           <Feather name="search" size={20} color="black" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Featured Cards */}
         <CardBanner
-          imageUri="https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg?q=70&fit=contain&w=1200&h=628&dpr=1"
-          tag="POKEMON"
+          imageUri="https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg"
+          tag="POKEMON TCG"
           title="Prismatic Evolutions"
           subtitle="Disponible ahora"
         />
 
         <CardBanner
-          imageUri="https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg?q=70&fit=contain&w=1200&h=628&dpr=1"
-          tag="POKEMON"
-          title="Las Mejores Cartas Pokemon"
-        />
-
-        <CardBanner
-          imageUri="https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg?q=70&fit=contain&w=1200&h=628&dpr=1"
-          tag="POKEMON"
-          title="Prismatic Evolutions"
-          subtitle="Edición Especial"
-        />
-
-        <CardBanner
-          imageUri="https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg?q=70&fit=contain&w=1200&h=628&dpr=1"
-          tag="POKEMON"
-          title="Colección Premium de Pokemon"
+          imageUri="https://www.afkstore.cl/cdn/shop/collections/118594441_665467184090972_222420396841581889_o.webp?v=1712098583"
+          tag="POKEMON TCG"
+          title="Vivid Voltage"
+          subtitle="Cartas eléctricas brillantes"
         />
 
         {/* Banners */}
         <HorizontalBanner
-          imageUri="https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg?q=70&fit=contain&w=1200&h=628&dpr=1"
+          imageUri="https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg"
           title="PRISMATIC"
           subtitle="EVOLUTIONS"
         />
 
         <HorizontalBanner
-          imageUri="https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg?q=70&fit=contain&w=1200&h=628&dpr=1"
-          title=""
-          height={50}
+          imageUri="https://www.afkstore.cl/cdn/shop/collections/118594441_665467184090972_222420396841581889_o.webp?v=1712098583"
+          title="SWORD & SHIELD"
+          subtitle="SERIES"
+          height={80}
         />
-
-        <HorizontalBanner
-          imageUri="https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg?q=70&fit=contain&w=1200&h=628&dpr=1"
-          title=""
-          height={50}
-        />
-
         {/* Product Sections */}
         <ProductSection
           title="Más Vendidos"
-          subtitle="Descubre estos productos destacados"
+          subtitle="Las cartas Pokemon más populares"
           products={bestSellersProducts}
         />
 
         <ProductSection
           title="Buscados Recientemente"
-          subtitle="Descubre productos de gran interés"
+          subtitle="Cartas de gran interés en la comunidad"
           products={recentlySearchedProducts}
+        />
+
+        <ProductSection
+          title="Nuevos Lanzamientos"
+          subtitle="Las últimas cartas de Prismatic Evolutions"
+          products={newReleasesProducts}
         />
 
         {/* Featured Product */}
         <FeaturedBanner
-          imageUri="https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg?q=70&fit=contain&w=1200&h=628&dpr=1"
+          imageUri="https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg"
           title="Prismatic Evolutions"
-          subtitle="Booster Box"
+          subtitle="Booster Box - Edición Especial"
         />
 
         {/* Footer */}
@@ -166,20 +199,20 @@ export default function HomeScreen() {
           </View>
 
           <Text style={styles.footerText}>
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullus et aliquam turpis. Morbi sagittis nisl eget
-            magna feugiat, quis feugiat magna euismod. Mauris sed libero magna.
+            Descubre el mundo de Pokemon TCG con las mejores cartas, estrategias y colecciones. Únete a millones de
+            entrenadores en todo el mundo.
           </Text>
 
-          <Text style={styles.footerText}>© 2023 Lorem Ipsum Company. Todos los derechos reservados.</Text>
+          <Text style={styles.footerText}>© 2025 Pokemon TCG Browser. Todos los derechos reservados.</Text>
 
           <Text style={styles.footerText}>
-            Suspendisse in ligula lacus. Nulla facilisi. Curabitur iaculis fermentum ipsum. Donec maximus, nisl in
-            auctor varius, massa velit pharetra purus, eget massa sem massa ante, et placerat magna ipsum eget diam.
+            Pokemon y todas las marcas relacionadas son propiedad de Nintendo, Game Freak y Creatures Inc. Este sitio no
+            está afiliado oficialmente con Pokemon Company International.
           </Text>
 
           <Text style={styles.footerText}>
-            Suspendisse in justo eu magna luctus suscipit. Sed lectus. Integer euismod lacus luctus magna. Quisque
-            cursus, metus vitae pharetra pharetra purus, eget massa sem massa ante, et placerat magna ipsum eget diam.
+            Explora, colecciona y batalla con las cartas más increíbles del universo Pokemon. Desde cartas clásicas
+            hasta las últimas expansiones.
           </Text>
 
           <View style={styles.footerLinks}>
@@ -226,6 +259,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     color: "#222323",
+    marginLeft: 4,
   },
   headerIcons: {
     flexDirection: "row",

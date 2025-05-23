@@ -1,5 +1,7 @@
+import { router } from "expo-router"
+import type React from "react"
 import { StyleSheet, Text, View } from "react-native"
-import ProductCarousel from "./ProductCarousel"
+import ProductCarousel from "../components/ProductCarousel"
 
 interface Product {
   id: string
@@ -12,32 +14,78 @@ interface ProductSectionProps {
   title: string
   subtitle: string
   products: Product[]
-  onProductPress?: (product: Product) => void
 }
 
-export default function ProductSection({ title, subtitle, products, onProductPress }: ProductSectionProps) {
+const ProductSection: React.FC<ProductSectionProps> = ({ title, subtitle, products }) => {
   return (
-    <View style={styles.sectionContainer}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <Text style={styles.sectionSubtitle}>{subtitle}</Text>
-      <ProductCarousel products={products} onProductPress={onProductPress} />
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.subtitle}>{subtitle}</Text>
+      </View>
+      <ProductCarousel
+        products={products}
+        onProductPress={(product) => {
+          router.push("/product-browser")
+        }}
+      />
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginHorizontal: 15,
-    marginVertical: 15,
+  container: {
+    marginVertical: 16,
   },
-  sectionTitle: {
-    fontSize: 16,
+  header: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 20,
     fontWeight: "bold",
-    color: "#000000",
+    color: "#333",
+    marginBottom: 4,
   },
-  sectionSubtitle: {
+  subtitle: {
+    fontSize: 14,
+    color: "#666",
+  },
+  listContainer: {
+    paddingHorizontal: 16,
+  },
+  productCard: {
+    width: 140,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  productImage: {
+    width: "100%",
+    height: 120,
+    resizeMode: "cover",
+  },
+  productInfo: {
+    padding: 8,
+  },
+  productTitle: {
     fontSize: 12,
-    color: "#5e616c",
-    marginBottom: 10,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 4,
+  },
+  productBrand: {
+    fontSize: 10,
+    color: "#666",
+  },
+  separator: {
+    width: 12,
   },
 })
+
+export default ProductSection

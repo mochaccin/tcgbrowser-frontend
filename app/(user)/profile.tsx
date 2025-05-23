@@ -1,24 +1,24 @@
 "use client"
 import {
-    Poppins_400Regular,
-    Poppins_500Medium,
-    Poppins_600SemiBold,
-    Poppins_700Bold,
-    useFonts,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  useFonts,
 } from "@expo-google-fonts/poppins"
-import { AntDesign, Feather } from "@expo/vector-icons"
+import { Feather } from "@expo/vector-icons"
 import { router } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import {
-    ActivityIndicator,
-    Dimensions,
-    Image,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native"
 import ProductCarousel from "../../components/ProductCarousel"
 import { useAuth } from "../context/AuthContext"
@@ -80,7 +80,7 @@ export default function ProfileScreen() {
         <Text style={styles.headerTitle}>Perfil</Text>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.headerIcon} onPress={() => router.push("/(user)/edit-profile")}>
-            <AntDesign name="edit" size={24} color="black" />
+            <Feather name="edit-2" size={24} color="black" />
           </TouchableOpacity>
         </View>
       </View>
@@ -122,11 +122,18 @@ export default function ProfileScreen() {
           <Text style={styles.userStats}>3,333 articulos publicados</Text>
         </View>
 
-        {/* Collections Button */}
-        <TouchableOpacity style={styles.collectionsButton} onPress={() => router.push("/my-collections")}>
-          <Feather name="grid" size={20} color="#fff" />
-          <Text style={styles.collectionsButtonText}>Ver mis colecciones</Text>
-        </TouchableOpacity>
+        {/* Quick Actions */}
+        <View style={styles.quickActionsContainer}>
+          <TouchableOpacity style={styles.quickActionButton} onPress={() => router.push("/my-collections")}>
+            <Feather name="grid" size={20} color="#fff" />
+            <Text style={styles.quickActionText}>Mis colecciones</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.quickActionButton} onPress={() => router.push("/inventory")}>
+            <Feather name="package" size={20} color="#fff" />
+            <Text style={styles.quickActionText}>Mi inventario</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Published Articles */}
         <View style={styles.articlesSection}>
@@ -222,7 +229,6 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     flexDirection: "row",
-    marginRight: 12,
   },
   headerIcon: {
     marginLeft: 16,
@@ -292,7 +298,13 @@ const styles = StyleSheet.create({
     color: "#222323",
     marginLeft: 8,
   },
-  collectionsButton: {
+  quickActionsContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginBottom: 24,
+    paddingHorizontal: 15,
+  },
+  quickActionButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -300,12 +312,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 25,
-    marginHorizontal: 50,
-    marginBottom: 24,
+    marginHorizontal: 8,
+    flex: 1,
   },
-  collectionsButtonText: {
+  quickActionText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: "Poppins_600SemiBold",
     marginLeft: 8,
   },

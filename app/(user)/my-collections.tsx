@@ -1,13 +1,14 @@
 "use client"
-import { Feather } from "@expo/vector-icons"
+import { AntDesign, Feather } from "@expo/vector-icons"
 import { LinearGradient } from "expo-linear-gradient"
 import { router } from "expo-router"
 import { StatusBar } from "expo-status-bar"
+import { useEffect, useState } from "react"
 import { Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native"
 
 export default function CollectionsScreen() {
   // Sample collections data
-  const collections = [
+  const allCollections = [
     {
       id: "1",
       name: "Dragon Ball",
@@ -20,7 +21,8 @@ export default function CollectionsScreen() {
       name: "One Piece",
       cardCount: 12,
       isFavorite: true,
-      imageUri: "https://comicbook.com/wp-content/uploads/sites/4/2025/03/Pokemon-TCG-Prismatic-Evolutions-SPC-Preorders.jpg",
+      imageUri:
+        "https://comicbook.com/wp-content/uploads/sites/4/2025/03/Pokemon-TCG-Prismatic-Evolutions-SPC-Preorders.jpg",
     },
     {
       id: "3",
@@ -30,6 +32,31 @@ export default function CollectionsScreen() {
       imageUri: "https://comicbook.com/wp-content/uploads/sites/4/2025/05/Pokemon-TCG-Black-and-White.jpg",
     },
   ]
+
+  // State for search query and filtered collections
+  const [searchQuery, setSearchQuery] = useState("")
+  const [filteredCollections, setFilteredCollections] = useState(allCollections)
+
+  // Filter collections when search query changes
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredCollections(allCollections)
+    } else {
+      const query = searchQuery.toLowerCase().trim()
+      const filtered = allCollections.filter((collection) => collection.name.toLowerCase().includes(query))
+      setFilteredCollections(filtered)
+    }
+  }, [searchQuery])
+
+  // Clear search query
+  const clearSearch = () => {
+    setSearchQuery("")
+  }
+
+  // Navigate to collection detail
+  const navigateToCollection = (collectionId: string) => {
+    router.push({ pathname: "/collection-details", params: { id: collectionId } })
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -46,9 +73,21 @@ export default function CollectionsScreen() {
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <TextInput style={styles.searchInput} placeholder="Busca tu colección" placeholderTextColor="#999" />
-        <TouchableOpacity style={styles.searchButton}>
-          <Feather name="search" size={20} color="black" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Busca tu colección"
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <TouchableOpacity style={styles.searchButton} onPress={searchQuery ? clearSearch : undefined}>
+          {searchQuery ? (
+            <Feather name="x" size={20} color="black" />
+          ) : (
+            <Feather name="search" size={20} color="black" />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -57,36 +96,48 @@ export default function CollectionsScreen() {
         <View style={styles.collectionsHeader}>
           <Text style={styles.collectionsTitle}>Mis Colecciones</Text>
           <TouchableOpacity style={styles.cameraButton} onPress={() => router.push("/add-collection")}>
-            <Feather name="camera" size={20} color="black" />
+            <AntDesign name="addfolder" size={20} color="black" />
           </TouchableOpacity>
         </View>
 
         {/* Collections List */}
         <View style={styles.collectionsContainer}>
-          {collections.map((collection) => (
-            <TouchableOpacity key={collection.id} style={styles.collectionCard}>
-              <Image source={{ uri: collection.imageUri }} style={styles.collectionImage} />
-              <LinearGradient
-                colors={["rgba(108, 8, 221, 0)", "rgba(108, 8, 221, 1)"]}
-                locations={[0.5, 1]}
-                style={styles.gradient}
-              />
-              <View style={styles.collectionContent}>
-                <View style={styles.collectionCardCount}>
-                  <Text style={styles.cardCountText}>{collection.cardCount} cartas</Text>
-                </View>
-                <View style={styles.collectionInfo}>
-                  <Text style={styles.collectionName}>{collection.name}</Text>
-                  <View style={styles.favoriteContainer}>
-                    <Feather name="star" size={14} color="#3ac692" />
-                    <Text style={styles.favoriteText}>Colección favorita</Text>
+          {filteredCollections.length > 0 ? (
+            filteredCollections.map((collection) => (
+              <TouchableOpacity
+                key={collection.id}
+                style={styles.collectionCard}
+                onPress={() => navigateToCollection(collection.id)}
+              >
+                <Image source={{ uri: collection.imageUri }} style={styles.collectionImage} />
+                <LinearGradient
+                  colors={["rgba(108, 8, 221, 0)", "rgba(107, 8, 221, 1)"]}
+                  locations={[0.2, 1]}
+                  style={styles.gradient}
+                />
+                <View style={styles.collectionContent}>
+                  <View style={styles.collectionCardCount}>
+                    <Text style={styles.cardCountText}>{collection.cardCount} cartas</Text>
+                  </View>
+                  <View style={styles.collectionInfo}>
+                    <Text style={styles.collectionName}>{collection.name}</Text>
+                    <View style={styles.favoriteContainer}>
+                      <Feather name="star" size={14} color="#3ac692" />
+                      <Text style={styles.favoriteText}>Colección favorita</Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.noResultsContainer}>
+              <Feather name="search" size={48} color="#ccc" />
+              <Text style={styles.noResultsText}>No se encontraron colecciones</Text>
+              <Text style={styles.noResultsSubtext}>Intenta con otro término de búsqueda</Text>
+            </View>
+          )}
 
-          {/* Create New Collection Button */}
+          {/* Create New Collection Button - Always show this */}
           <TouchableOpacity style={styles.createCollectionButton} onPress={() => router.push("/add-collection")}>
             <Feather name="plus" size={24} color="#6c08dd" />
             <Text style={styles.createCollectionText}>Crear nueva colección</Text>
@@ -182,8 +233,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-    
   },
   collectionImage: {
     width: "100%",
@@ -203,7 +252,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
   },
   cardCountText: {
     fontSize: 12,
@@ -243,43 +291,22 @@ const styles = StyleSheet.create({
     color: "#6c08dd",
     marginTop: 8,
   },
-  footer: {
-    backgroundColor: "#222323",
-    padding: 20,
-    marginTop: 20,
-  },
-  socialIcons: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 15,
-  },
-  footerSocialIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#3F3F46",
+  noResultsContainer: {
     alignItems: "center",
     justifyContent: "center",
-    marginHorizontal: 5,
+    padding: 40,
+    marginVertical: 20,
   },
-  footerText: {
-    color: "#BBC5CB",
-    fontSize: 10,
+  noResultsText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#666",
+    marginTop: 16,
+  },
+  noResultsSubtext: {
+    fontSize: 14,
+    color: "#999",
+    marginTop: 8,
     textAlign: "center",
-    marginVertical: 10,
-  },
-  footerLinks: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 15,
-  },
-  footerLink: {
-    color: "#BBC5CB",
-    fontSize: 10,
-  },
-  footerLinkDivider: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    marginHorizontal: 5,
   },
 })

@@ -1,3 +1,4 @@
+import { router } from "expo-router"
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native"
 
 interface CardBannerProps {
@@ -9,18 +10,32 @@ interface CardBannerProps {
 }
 
 export default function CardBanner({ imageUri, tag, title, subtitle, onPress }: CardBannerProps) {
+  const handlePress = () => {
+    if (onPress) {
+      onPress()
+    } else {
+      router.push("/product-browser")
+    }
+  }
+
   return (
-    <View style={styles.cardContainer}>
+    <TouchableOpacity style={styles.cardContainer} onPress={handlePress} activeOpacity={0.9}>
       <Image source={{ uri: imageUri }} style={styles.cardImage} />
       <View style={styles.cardOverlay}>
         <Text style={styles.cardTag}>{tag}</Text>
         <Text style={styles.cardTitle}>{title}</Text>
         {subtitle && <Text style={styles.cardSubtitle}>{subtitle}</Text>}
-        <TouchableOpacity style={styles.cardButton} onPress={onPress}>
+        <TouchableOpacity
+          style={styles.cardButton}
+          onPress={(e) => {
+            e.stopPropagation() // Prevent triggering parent's onPress
+            handlePress()
+          }}
+        >
           <Text style={styles.cardButtonText}>Ver más</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   )
 }
 

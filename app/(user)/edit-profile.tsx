@@ -1,10 +1,10 @@
 "use client"
 import {
-    Poppins_400Regular,
-    Poppins_500Medium,
-    Poppins_600SemiBold,
-    Poppins_700Bold,
-    useFonts,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  useFonts,
 } from "@expo-google-fonts/poppins"
 import { Feather } from "@expo/vector-icons"
 import * as ImagePicker from "expo-image-picker"
@@ -12,17 +12,18 @@ import { router } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { useState } from "react"
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native"
+import CollectionToast from "../../components/CollectionToast"
 import { useAuth } from "../context/AuthContext"
 
 export default function EditProfileScreen() {
@@ -37,6 +38,7 @@ export default function EditProfileScreen() {
     "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Untitled-uaThW8rED8JCpG84CL2P8zc7QmRKR5.png",
   )
   const [isSaving, setIsSaving] = useState(false)
+  const [toastVisible, setToastVisible] = useState(false)
 
   // Load Poppins fonts
   const [fontsLoaded] = useFonts({
@@ -80,15 +82,30 @@ export default function EditProfileScreen() {
     // Simulate saving data
     setTimeout(() => {
       setIsSaving(false)
-      Alert.alert("Cambios guardados", "Tu perfil ha sido actualizado correctamente.", [
-        { text: "OK", onPress: () => router.push("/profile") },
-      ])
+      setToastVisible(true)
+
+      // Navigate to profile after toast is shown
+      setTimeout(() => {
+        router.push("/profile")
+      }, 1500)
     }, 1500)
   }
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
+
+      {/* Profile Update Toast */}
+      <CollectionToast
+        visible={toastVisible}
+        message="Tu perfil ha sido actualizado correctamente"
+        title="¡Perfil actualizado!"
+        collectionName={name}
+        collectionImage={profileImage}
+        onDismiss={() => setToastVisible(false)}
+        type="success"
+        duration={3000}
+      />
 
       {/* Header */}
       <View style={styles.header}>
@@ -100,7 +117,6 @@ export default function EditProfileScreen() {
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        
         {/* Profile Image */}
         <View style={styles.profileImageContainer}>
           <Image source={{ uri: profileImage }} style={styles.profileImage} />
@@ -156,55 +172,6 @@ export default function EditProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Footer - Using the exact same implementation as home screen */}
-        {/* Footer */}
-        <View style={styles.footer}>
-          <View style={styles.socialIcons}>
-            <TouchableOpacity style={styles.footerSocialIcon}>
-              <Feather name="facebook" size={20} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.footerSocialIcon}>
-              <Feather name="instagram" size={20} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.footerSocialIcon}>
-              <Feather name="twitter" size={20} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.footerSocialIcon}>
-              <Feather name="youtube" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.footerText}>
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullus et aliquam turpis. Morbi sagittis nisl eget
-            magna feugiat, quis feugiat magna euismod. Mauris sed libero magna.
-          </Text>
-
-          <Text style={styles.footerText}>© 2023 Lorem Ipsum Company. Todos los derechos reservados.</Text>
-
-          <Text style={styles.footerText}>
-            Suspendisse in ligula lacus. Nulla facilisi. Curabitur iaculis fermentum ipsum. Donec maximus, nisl in
-            auctor varius, massa velit pharetra purus, eget massa sem massa ante, et placerat magna ipsum eget diam.
-          </Text>
-
-          <Text style={styles.footerText}>
-            Suspendisse in justo eu magna luctus suscipit. Sed lectus. Integer euismod lacus luctus magna. Quisque
-            cursus, metus vitae pharetra pharetra purus, eget massa sem massa ante, et placerat magna ipsum eget diam.
-          </Text>
-
-          <View style={styles.footerLinks}>
-            <TouchableOpacity>
-              <Text style={styles.footerLink}>Política de Privacidad</Text>
-            </TouchableOpacity>
-            <Text style={styles.footerLinkDivider}>|</Text>
-            <TouchableOpacity>
-              <Text style={styles.footerLink}>Términos de Servicio</Text>
-            </TouchableOpacity>
-            <Text style={styles.footerLinkDivider}>|</Text>
-            <TouchableOpacity>
-              <Text style={styles.footerLink}>Accesibilidad</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       </ScrollView>
     </SafeAreaView>
   )

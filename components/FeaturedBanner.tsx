@@ -1,3 +1,4 @@
+import { router } from "expo-router"
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native"
 
 interface FeaturedBannerProps {
@@ -8,13 +9,29 @@ interface FeaturedBannerProps {
 }
 
 export default function FeaturedBanner({ imageUri, title, subtitle, onPress }: FeaturedBannerProps) {
+  const handlePress = () => {
+    if (onPress) {
+      onPress()
+    } else {
+      router.push("/product-browser")
+    }
+  }
+
+  const handleButtonPress = () => {
+    if (onPress) {
+      onPress()
+    } else {
+      router.push("/product-browser")
+    }
+  }
+
   return (
-    <View style={styles.featuredContainer}>
+    <TouchableOpacity style={styles.featuredContainer} onPress={handlePress} activeOpacity={0.9}>
       <Image source={{ uri: imageUri }} style={styles.featuredImage} />
       <View style={styles.featuredOverlay}>
         <Text style={styles.featuredTitle}>{title}</Text>
         <Text style={styles.featuredSubtitle}>{subtitle}</Text>
-        <TouchableOpacity style={styles.featuredButton} onPress={onPress}>
+        <TouchableOpacity style={styles.featuredButton} onPress={handleButtonPress}>
           <Text style={styles.featuredButtonText}>Ver más</Text>
         </TouchableOpacity>
       </View>
@@ -24,7 +41,7 @@ export default function FeaturedBanner({ imageUri, title, subtitle, onPress }: F
         <View style={[styles.paginationDot, styles.activeDot]} />
         <View style={styles.paginationDot} />
       </View>
-    </View>
+    </TouchableOpacity>
   )
 }
 
@@ -39,6 +56,7 @@ const styles = StyleSheet.create({
   featuredImage: {
     width: "100%",
     height: "100%",
+    resizeMode: "cover",
   },
   featuredOverlay: {
     position: "absolute",
