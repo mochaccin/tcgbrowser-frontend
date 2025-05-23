@@ -40,33 +40,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkAuthState = async () => {
     try {
+      console.log("Checking auth state...")
       const userJson = await AsyncStorage.getItem(USER_STORAGE_KEY)
       if (userJson) {
         const userData = JSON.parse(userJson)
+        console.log("Found existing user:", userData)
         setUser(userData)
+      } else {
+        console.log("No existing user found")
       }
     } catch (error) {
       console.error("Error checking auth state:", error)
     } finally {
       setIsLoading(false)
+      console.log("Auth state check complete")
     }
   }
 
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true)
+      console.log("Starting login process...")
+
       // Here you would make an API call to your backend
       // For now, we'll simulate a successful login
       const mockUser: User = {
         id: "1",
         email,
         username: "user123",
-        name: "User Name",
+        name: "Usuario TCG",
       }
 
+      console.log("Saving user to AsyncStorage...")
       // Save user to AsyncStorage
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(mockUser))
+
+      console.log("Setting user in state...")
       setUser(mockUser)
+
+      console.log("Login successful, navigating to home...")
+      // Navigate to home page
       router.replace("/")
     } catch (error) {
       console.error("Login error:", error)
@@ -105,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
+      console.log("Logging out...")
       await AsyncStorage.removeItem(USER_STORAGE_KEY)
       setUser(null)
       router.replace("/(auth)/login")
@@ -149,3 +163,5 @@ export function useAuth() {
   }
   return context
 }
+
+export default AuthProvider

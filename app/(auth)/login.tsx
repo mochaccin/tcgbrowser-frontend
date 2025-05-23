@@ -12,6 +12,7 @@ import { Link, router } from "expo-router"
 import { useEffect, useRef, useState } from "react"
 import {
     ActivityIndicator,
+    Alert,
     Animated,
     Easing,
     Pressable,
@@ -24,11 +25,15 @@ import {
     View,
 } from "react-native"
 import { ScrollView } from "react-native-gesture-handler"
+import { useAuth } from "../context/AuthContext"
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("n.pelizari01@ufromail.cl")
   const [password, setPassword] = useState("panconqueso12345678")
   const [showPassword, setShowPassword] = useState(false)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+
+  const { login } = useAuth()
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -58,30 +63,44 @@ export default function LoginScreen() {
     )
   }
 
-  const handleLogin = () => {
-    // Implement login logic here
-    console.log("Login with:", email, password)
-    // Navigate to the main app after successful login
-    router.replace("/")
+  const handleLogin = async () => {
+    try {
+      setIsLoggingIn(true)
+      console.log("Attempting login with:", email, password)
+
+      // Call the login function from AuthContext
+      await login(email, password)
+
+      console.log("Login successful, should redirect now")
+    } catch (error) {
+      console.error("Login failed:", error)
+      Alert.alert("Error", "No se pudo iniciar sesión. Por favor, intenta de nuevo.")
+    } finally {
+      setIsLoggingIn(false)
+    }
   }
 
   // Button press animation
   const onPressIn = () => {
-    Animated.timing(buttonScale, {
-      toValue: 0.95,
-      duration: 100,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start()
+    if (!isLoggingIn) {
+      Animated.timing(buttonScale, {
+        toValue: 0.95,
+        duration: 100,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }).start()
+    }
   }
 
   const onPressOut = () => {
-    Animated.timing(buttonScale, {
-      toValue: 1,
-      duration: 100,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start()
+    if (!isLoggingIn) {
+      Animated.timing(buttonScale, {
+        toValue: 1,
+        duration: 100,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }).start()
+    }
   }
 
   return (
@@ -109,6 +128,7 @@ export default function LoginScreen() {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              editable={!isLoggingIn}
             />
 
             <Text style={styles.label}>Contraseña</Text>
@@ -119,24 +139,30 @@ export default function LoginScreen() {
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
+                editable={!isLoggingIn}
               />
               <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
                 <Feather name={showPassword ? "eye" : "eye-off"} size={20} color="#5e616c" />
               </Pressable>
             </View>
 
-            <TouchableOpacity onPress={() => router.push("/forgot-password")}>
+            <TouchableOpacity onPress={() => router.push("/forgot-password")} disabled={isLoggingIn}>
               <Text style={styles.forgotPassword}>¿Has olvidado tu contraseña?</Text>
             </TouchableOpacity>
 
             <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
               <TouchableOpacity
-                style={styles.loginButton}
+                style={[styles.loginButton, isLoggingIn && styles.loginButtonDisabled]}
                 onPress={handleLogin}
                 onPressIn={onPressIn}
                 onPressOut={onPressOut}
+                disabled={isLoggingIn}
               >
-                <Text style={styles.loginButtonText}>Iniciar sesión</Text>
+                {isLoggingIn ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.loginButtonText}>Iniciar sesión</Text>
+                )}
               </TouchableOpacity>
             </Animated.View>
 
@@ -148,7 +174,7 @@ export default function LoginScreen() {
             <View style={styles.signupContainer}>
               <Text style={styles.signupText}>¿No tienes una cuenta?</Text>
               <Link href="/register" asChild>
-                <TouchableOpacity>
+                <TouchableOpacity disabled={isLoggingIn}>
                   <Text style={styles.signupLink}>Crea una aquí</Text>
                 </TouchableOpacity>
               </Link>
@@ -308,6 +334,11 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: "center",
     marginBottom: 24,
+    minHeight: 56,
+    justifyContent: "center",
+  },
+  loginButtonDisabled: {
+    backgroundColor: "#b794e5",
   },
   loginButtonText: {
     color: "white",

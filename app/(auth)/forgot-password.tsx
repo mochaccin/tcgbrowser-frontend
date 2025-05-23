@@ -23,9 +23,11 @@ import {
     View,
 } from "react-native"
 import { ScrollView } from "react-native-gesture-handler"
+import { useAuth } from "../context/AuthContext"
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("n.pelizari01@ufromail.cl")
+  const { resetPassword } = useAuth()
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -55,11 +57,15 @@ export default function ForgotPasswordScreen() {
     )
   }
 
-  const handleResetPassword = () => {
-    // Implement password reset logic here
-    console.log("Reset password for:", email)
-    // Navigate to the confirmation screen
-    router.push("/forgot-password-confirmation")
+  const handleResetPassword = async () => {
+    try {
+      await resetPassword(email)
+      // Navigate to the confirmation screen
+      router.push("/forgot-password-confirmation")
+    } catch (error) {
+      console.error("Error resetting password:", error)
+      // Handle error (show alert, etc.)
+    }
   }
 
   // Button press animation
@@ -94,7 +100,7 @@ export default function ForgotPasswordScreen() {
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
           <View style={styles.formContainer}>
             <Text style={styles.label}>Correo Electrónico</Text>
             <TextInput
@@ -120,61 +126,61 @@ export default function ForgotPasswordScreen() {
               <Text style={styles.goBackText}>Devolverse</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Footer - only shows when scrolled to bottom */}
+          <View style={styles.footer}>
+            <View style={styles.socialIcons}>
+              <TouchableOpacity style={styles.iconButton}>
+                <Feather name="facebook" size={24} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.iconButton}>
+                <Feather name="instagram" size={24} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.iconButton}>
+                <Feather name="twitter" size={24} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.iconButton}>
+                <Feather name="help-circle" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.footerText}>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam in dui mauris. Vivamus hendrerit arcu sed
+              erat molestie vehicula. Sed auctor neque eu tellus rhoncus ut eleifend nibh porttitor. Ut in nulla enim.
+            </Text>
+
+            <Text style={styles.copyright}>© 2025 Lorem Ipsum Company. Todos los derechos reservados.</Text>
+
+            <Text style={styles.footerText}>
+              Suspendisse in justo eu magna luctus suscipit. Sed lectus. Integer euismod lacus luctus magna. Quisque
+              cursus, metus vitae pharetra auctor, sem massa mattis sem, at interdum magna augue eget diam.
+            </Text>
+
+            <Text style={styles.footerText}>
+              Suspendisse in justo eu magna luctus suscipit. Sed lectus. Integer euismod lacus luctus magna. Quisque
+              cursus, metus vitae pharetra auctor, sem massa mattis sem, at interdum magna augue eget diam.
+            </Text>
+
+            <View style={styles.footerLinks}>
+              <TouchableOpacity>
+                <Text style={styles.footerLink}>Política de Privacidad</Text>
+              </TouchableOpacity>
+              <Text style={styles.footerLinkSeparator}>|</Text>
+              <TouchableOpacity>
+                <Text style={styles.footerLink}>Términos de Servicio</Text>
+              </TouchableOpacity>
+              <Text style={styles.footerLinkSeparator}>|</Text>
+              <TouchableOpacity>
+                <Text style={styles.footerLink}>Accesibilidad</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity>
+              <Text style={styles.footerText}>No vender ni compartir mi información personal</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </Animated.View>
-
-      {/* Footer */}
-      <View style={styles.footer}>
-        <View style={styles.socialIcons}>
-          <TouchableOpacity style={styles.iconButton}>
-            <Feather name="facebook" size={24} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Feather name="instagram" size={24} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Feather name="twitter" size={24} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Feather name="help-circle" size={24} color="white" />
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.footerText}>
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam in dui mauris. Vivamus hendrerit arcu sed erat
-          molestie vehicula. Sed auctor neque eu tellus rhoncus ut eleifend nibh porttitor. Ut in nulla enim.
-        </Text>
-
-        <Text style={styles.copyright}>© 2025 Lorem Ipsum Company. Todos los derechos reservados.</Text>
-
-        <Text style={styles.footerText}>
-          Suspendisse in justo eu magna luctus suscipit. Sed lectus. Integer euismod lacus luctus magna. Quisque cursus,
-          metus vitae pharetra auctor, sem massa mattis sem, at interdum magna augue eget diam.
-        </Text>
-
-        <Text style={styles.footerText}>
-          Suspendisse in justo eu magna luctus suscipit. Sed lectus. Integer euismod lacus luctus magna. Quisque cursus,
-          metus vitae pharetra auctor, sem massa mattis sem, at interdum magna augue eget diam.
-        </Text>
-
-        <View style={styles.footerLinks}>
-          <TouchableOpacity>
-            <Text style={styles.footerLink}>Política de Privacidad</Text>
-          </TouchableOpacity>
-          <Text style={styles.footerLinkSeparator}>|</Text>
-          <TouchableOpacity>
-            <Text style={styles.footerLink}>Términos de Servicio</Text>
-          </TouchableOpacity>
-          <Text style={styles.footerLinkSeparator}>|</Text>
-          <TouchableOpacity>
-            <Text style={styles.footerLink}>Accesibilidad</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity>
-          <Text style={styles.footerText}>No vender ni compartir mi información personal</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   )
 }
@@ -214,6 +220,7 @@ const styles = StyleSheet.create({
   formContainer: {
     width: "100%",
     marginTop: 20,
+    marginBottom: 40,
   },
   label: {
     fontSize: 16,
@@ -255,6 +262,8 @@ const styles = StyleSheet.create({
   footer: {
     backgroundColor: "#222323",
     padding: 20,
+    marginTop: 40,
+    marginHorizontal: -20,
   },
   socialIcons: {
     flexDirection: "row",
