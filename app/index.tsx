@@ -1,13 +1,19 @@
+"use client"
+
 import { Feather } from "@expo/vector-icons"
 import { router } from "expo-router"
 import { StatusBar } from "expo-status-bar"
+import { useState } from "react"
 import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native"
 import CardBanner from "../components/CardBanner"
 import FeaturedBanner from "../components/FeaturedBanner"
 import HorizontalBanner from "../components/HorizontalBanner"
+import NavigationDrawer from "../components/NavigationDrawer"
 import ProductSection from "../components/ProductSection"
 
 export default function HomeScreen() {
+  const [drawerVisible, setDrawerVisible] = useState(false)
+
   const bestSellersProducts = [
     {
       id: "1",
@@ -99,9 +105,12 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="auto" />
 
+      {/* Navigation Drawer */}
+      <NavigationDrawer visible={drawerVisible} onClose={() => setDrawerVisible(false)} />
+
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => setDrawerVisible(true)}>
           <Feather name="menu" size={24} color="black" />
         </TouchableOpacity>
         <View style={styles.logoContainer}>

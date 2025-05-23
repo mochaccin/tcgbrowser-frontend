@@ -15,6 +15,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native"
+import NavigationDrawer from "../../components/NavigationDrawer"
 
 const { width } = Dimensions.get("window")
 
@@ -110,6 +111,7 @@ const SORT_OPTIONS = [
 export default function SearchResultsScreen() {
   const params = useLocalSearchParams()
   const searchQuery = (params.query as string) || ""
+  const [drawerVisible, setDrawerVisible] = useState(false)
 
   // State
   const [cards, setCards] = useState(CARD_DATA)
@@ -261,16 +263,19 @@ export default function SearchResultsScreen() {
 
   // Navigate to card detail
   const navigateToCardDetail = (cardId: string) => {
-    router.push(`/card/${cardId}`)
+    router.push({ pathname: "/product-details", params: { cardId } })
   }
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
 
+      {/* Navigation Drawer */}
+      <NavigationDrawer visible={drawerVisible} onClose={() => setDrawerVisible(false)} />
+
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => setDrawerVisible(true)}>
           <Feather name="menu" size={24} color="black" />
         </TouchableOpacity>
         <View style={styles.logoContainer}>
@@ -339,7 +344,9 @@ export default function SearchResultsScreen() {
         {/* Featured Banner */}
         <View style={styles.featuredBanner}>
           <Image
-            source={{ uri: "https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg?q=70&fit=contain&w=1200&h=628&dpr=1" }}
+            source={{
+              uri: "https://static1.dualshockersimages.com/wordpress/wp-content/uploads/2025/01/prismatic-evo-logo.jpg?q=70&fit=contain&w=1200&h=628&dpr=1",
+            }}
             style={styles.featuredBannerImage}
           />
           <View style={styles.featuredBannerOverlay}>
@@ -898,15 +905,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     marginRight: 8,
-    marginBottom: 8,
-  },
-  filterOptionSelected: {
-    backgroundColor: "#6c08dd",
-  },
-  filterOptionText: {
-    fontSize: 14,
-  },
-  filterOptionTextSelected: {
     marginBottom: 8,
   },
   filterOptionSelected: {

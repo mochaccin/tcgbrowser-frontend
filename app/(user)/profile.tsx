@@ -142,55 +142,6 @@ export default function ProfileScreen() {
 
           <ProductCarousel products={publishedArticles} />
         </View>
-
-        {/* Footer - Using the exact same implementation as home screen */}
-        <View style={styles.footer}>
-          <View style={styles.socialIcons}>
-            <TouchableOpacity style={styles.footerSocialIcon}>
-              <Feather name="facebook" size={20} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.footerSocialIcon}>
-              <Feather name="instagram" size={20} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.footerSocialIcon}>
-              <Feather name="twitter" size={20} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.footerSocialIcon}>
-              <Feather name="youtube" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.footerText}>
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullus et aliquam turpis. Morbi sagittis nisl eget
-            magna feugiat, quis feugiat magna euismod. Mauris sed libero magna.
-          </Text>
-
-          <Text style={styles.footerText}>© 2023 Lorem Ipsum Company. Todos los derechos reservados.</Text>
-
-          <Text style={styles.footerText}>
-            Suspendisse in ligula lacus. Nulla facilisi. Curabitur iaculis fermentum ipsum. Donec maximus, nisl in
-            auctor varius, massa velit pharetra purus, eget massa sem massa ante, et placerat magna ipsum eget diam.
-          </Text>
-
-          <Text style={styles.footerText}>
-            Suspendisse in justo eu magna luctus suscipit. Sed lectus. Integer euismod lacus luctus magna. Quisque
-            cursus, metus vitae pharetra pharetra purus, eget massa sem massa ante, et placerat magna ipsum eget diam.
-          </Text>
-
-          <View style={styles.footerLinks}>
-            <TouchableOpacity>
-              <Text style={styles.footerLink}>Política de Privacidad</Text>
-            </TouchableOpacity>
-            <Text style={styles.footerLinkDivider}>|</Text>
-            <TouchableOpacity>
-              <Text style={styles.footerLink}>Términos de Servicio</Text>
-            </TouchableOpacity>
-            <Text style={styles.footerLinkDivider}>|</Text>
-            <TouchableOpacity>
-              <Text style={styles.footerLink}>Accesibilidad</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       </ScrollView>
     </SafeAreaView>
   )
