@@ -173,58 +173,7 @@ export default function ResetPasswordScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Footer - only shows when scrolled to bottom */}
-          <View style={styles.footer}>
-            <View style={styles.socialIcons}>
-              <TouchableOpacity style={styles.iconButton}>
-                <Feather name="facebook" size={24} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton}>
-                <Feather name="instagram" size={24} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton}>
-                <Feather name="twitter" size={24} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton}>
-                <Feather name="help-circle" size={24} color="white" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.footerText}>
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam in dui mauris. Vivamus hendrerit arcu sed
-              erat molestie vehicula. Sed auctor neque eu tellus rhoncus ut eleifend nibh porttitor. Ut in nulla enim.
-            </Text>
-
-            <Text style={styles.copyright}>© 2025 Lorem Ipsum Company. Todos los derechos reservados.</Text>
-
-            <Text style={styles.footerText}>
-              Suspendisse in justo eu magna luctus suscipit. Sed lectus. Integer euismod lacus luctus magna. Quisque
-              cursus, metus vitae pharetra auctor, sem massa mattis sem, at interdum magna augue eget diam.
-            </Text>
-
-            <Text style={styles.footerText}>
-              Suspendisse in justo eu magna luctus suscipit. Sed lectus. Integer euismod lacus luctus magna. Quisque
-              cursus, metus vitae pharetra auctor, sem massa mattis sem, at interdum magna augue eget diam.
-            </Text>
-
-            <View style={styles.footerLinks}>
-              <TouchableOpacity>
-                <Text style={styles.footerLink}>Política de Privacidad</Text>
-              </TouchableOpacity>
-              <Text style={styles.footerLinkSeparator}>|</Text>
-              <TouchableOpacity>
-                <Text style={styles.footerLink}>Términos de Servicio</Text>
-              </TouchableOpacity>
-              <Text style={styles.footerLinkSeparator}>|</Text>
-              <TouchableOpacity>
-                <Text style={styles.footerLink}>Accesibilidad</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity>
-              <Text style={styles.footerText}>No vender ni compartir mi información personal</Text>
-            </TouchableOpacity>
-          </View>
+          
         </ScrollView>
       </Animated.View>
     </SafeAreaView>
