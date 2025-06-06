@@ -1,28 +1,30 @@
 "use client"
 
 import {
-    Poppins_400Regular,
-    Poppins_500Medium,
-    Poppins_600SemiBold,
-    Poppins_700Bold,
-    useFonts,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  useFonts,
 } from "@expo-google-fonts/poppins"
 import { Feather } from "@expo/vector-icons"
-import { router } from "expo-router"
+import { router, useLocalSearchParams } from "expo-router"
 import { useEffect, useRef, useState } from "react"
 import {
-    ActivityIndicator,
-    Animated,
-    Easing,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  Easing,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native"
 import { ScrollView } from "react-native-gesture-handler"
+import Toast from "../../components/Toast"
+import { useUserStore } from "../../store/userStore"
 
 export default function ResetPasswordScreen() {
   const [password, setPassword] = useState("")
@@ -30,6 +32,21 @@ export default function ResetPasswordScreen() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [passwordsMatch, setPasswordsMatch] = useState(true)
+  const [isResetting, setIsResetting] = useState(false)
+  const [toast, setToast] = useState<{
+    visible: boolean
+    message: string
+    title?: string
+    type: "success" | "error" | "info" | "warning"
+  }>({
+    visible: false,
+    message: "",
+    type: "success",
+  })
+
+  const { updatePassword } = useUserStore()
+  const params = useLocalSearchParams()
+  const userId = (params.userId as string) || "6841145ce0bf7aed1bbed7a1" // Default to your user ID
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -68,39 +85,71 @@ export default function ResetPasswordScreen() {
     )
   }
 
-  // 1. Modify the isFormValid check to properly update when passwords match
+  const showToast = (message: string, type: "success" | "error" | "info" | "warning", title?: string) => {
+    setToast({ visible: true, message, type, title })
+  }
+
   const isFormValid = passwordsMatch && password && confirmPassword
 
-  // 2. Update the handleResetPassword function to redirect to login
-  const handleResetPassword = () => {
-    // Implement password reset logic here
-    console.log("Resetting password to:", password)
-    // Navigate to login after successful reset
-    router.replace("/(auth)/login")
+  const handleResetPassword = async () => {
+    try {
+      setIsResetting(true)
+      console.log("Resetting password for user:", userId)
+
+      await updatePassword(userId, password)
+
+      showToast("Tu contraseña ha sido actualizada correctamente", "success", "¡Contraseña actualizada!")
+
+      // Delay navigation to show toast
+      setTimeout(() => {
+        router.replace("/login")
+      }, 1500)
+    } catch (error) {
+      console.error("Password reset failed:", error)
+      showToast(
+        error instanceof Error ? error.message : "No se pudo actualizar la contraseña. Inténtalo de nuevo.",
+        "error",
+        "Error al actualizar",
+      )
+    } finally {
+      setIsResetting(false)
+    }
   }
 
   // Button press animation
   const onPressIn = () => {
-    Animated.timing(buttonScale, {
-      toValue: 0.95,
-      duration: 100,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start()
+    if (!isResetting && isFormValid) {
+      Animated.timing(buttonScale, {
+        toValue: 0.95,
+        duration: 100,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }).start()
+    }
   }
 
   const onPressOut = () => {
-    Animated.timing(buttonScale, {
-      toValue: 1,
-      duration: 100,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start()
+    if (!isResetting && isFormValid) {
+      Animated.timing(buttonScale, {
+        toValue: 1,
+        duration: 100,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }).start()
+    }
   }
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
+
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        title={toast.title}
+        type={toast.type}
+        onDismiss={() => setToast({ ...toast, visible: false })}
+      />
 
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         <View style={styles.header}>
@@ -121,11 +170,13 @@ export default function ResetPasswordScreen() {
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
+                editable={!isResetting}
               />
               <TouchableOpacity
                 style={styles.eyeIcon}
                 onPress={() => setShowPassword(!showPassword)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                disabled={isResetting}
               >
                 <Feather name={showPassword ? "eye" : "eye-off"} size={20} color="#5e616c" />
               </TouchableOpacity>
@@ -139,11 +190,13 @@ export default function ResetPasswordScreen() {
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
+                editable={!isResetting}
               />
               <TouchableOpacity
                 style={styles.eyeIcon}
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                disabled={isResetting}
               >
                 <Feather name={showConfirmPassword ? "eye" : "eye-off"} size={20} color="#5e616c" />
               </TouchableOpacity>
@@ -158,22 +211,32 @@ export default function ResetPasswordScreen() {
 
             <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
               <TouchableOpacity
-                style={[styles.resetButton, passwordsMatch ? styles.resetButtonActive : styles.resetButtonDisabled]}
+                style={[
+                  styles.resetButton,
+                  isFormValid ? styles.resetButtonActive : styles.resetButtonDisabled,
+                  isResetting && styles.resetButtonDisabled,
+                ]}
                 onPress={handleResetPassword}
-                onPressIn={passwordsMatch ? onPressIn : undefined}
-                onPressOut={passwordsMatch ? onPressOut : undefined}
-                disabled={!passwordsMatch}
+                onPressIn={isFormValid ? onPressIn : undefined}
+                onPressOut={isFormValid ? onPressOut : undefined}
+                disabled={!isFormValid || isResetting}
               >
-                <Text style={styles.resetButtonText}>Restaurar Contraseña</Text>
+                {isResetting ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.resetButtonText}>Restaurar Contraseña</Text>
+                )}
               </TouchableOpacity>
             </Animated.View>
 
-            <TouchableOpacity onPress={() => router.push("/login")} style={styles.cancelContainer}>
+            <TouchableOpacity
+              onPress={() => router.push("/login")}
+              style={styles.cancelContainer}
+              disabled={isResetting}
+            >
               <Text style={styles.cancelText}>Cancelar</Text>
             </TouchableOpacity>
           </View>
-
-          
         </ScrollView>
       </Animated.View>
     </SafeAreaView>
@@ -252,6 +315,8 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: "center",
     marginBottom: 16,
+    minHeight: 56,
+    justifyContent: "center",
   },
   resetButtonActive: {
     backgroundColor: "#6c08dd",
@@ -273,47 +338,5 @@ const styles = StyleSheet.create({
     color: "#6c08dd",
     fontSize: 16,
     fontFamily: "Poppins_500Medium",
-  },
-  footer: {
-    backgroundColor: "#222323",
-    padding: 20,
-    marginTop: 40,
-    marginHorizontal: -20,
-  },
-  socialIcons: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 20,
-  },
-  iconButton: {
-    marginHorizontal: 16,
-  },
-  footerText: {
-    color: "white",
-    textAlign: "center",
-    fontSize: 14,
-    marginBottom: 16,
-    fontFamily: "Poppins_400Regular",
-  },
-  copyright: {
-    color: "white",
-    textAlign: "center",
-    fontSize: 14,
-    marginBottom: 16,
-    fontFamily: "Poppins_400Regular",
-  },
-  footerLinks: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  footerLink: {
-    color: "white",
-    fontSize: 14,
-    fontFamily: "Poppins_400Regular",
-  },
-  footerLinkSeparator: {
-    color: "white",
-    marginHorizontal: 8,
   },
 })

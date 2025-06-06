@@ -1,39 +1,56 @@
 "use client"
 
 import {
-    Poppins_400Regular,
-    Poppins_500Medium,
-    Poppins_600SemiBold,
-    Poppins_700Bold,
-    useFonts,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  useFonts,
 } from "@expo-google-fonts/poppins"
 import { Feather } from "@expo/vector-icons"
 import { Link, router } from "expo-router"
 import { useEffect, useRef, useState } from "react"
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Easing,
-    Pressable,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  Easing,
+  Pressable,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native"
 import { ScrollView } from "react-native-gesture-handler"
-import { useAuth } from "../context/AuthContext"
+import Toast from "../../components/Toast"
+import { useUserStore } from "../../store/userStore"
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("n.pelizari01@ufromail.cl")
   const [password, setPassword] = useState("panconqueso12345678")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [toast, setToast] = useState<{
+    visible: boolean
+    message: string
+    title?: string
+    type: "success" | "error" | "info" | "warning"
+  }>({
+    visible: false,
+    message: "",
+    type: "success",
+  })
 
-  const { login } = useAuth()
+  const { login, isAuthenticated } = useUserStore()
+
+  // Redirect to home if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace("/")
+    }
+  }, [isAuthenticated])
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -63,18 +80,31 @@ export default function LoginScreen() {
     )
   }
 
+  const showToast = (message: string, type: "success" | "error" | "info" | "warning", title?: string) => {
+    setToast({ visible: true, message, type, title })
+  }
+
   const handleLogin = async () => {
     try {
       setIsLoggingIn(true)
       console.log("Attempting login with:", email, password)
 
-      // Call the login function from AuthContext
+      // Call the login function from user store
       await login(email, password)
 
-      console.log("Login successful, should redirect now")
+      showToast("Sesión iniciada correctamente", "success", "¡Bienvenido!")
+
+      // Delay navigation to show toast
+      setTimeout(() => {
+        router.replace("/")
+      }, 1500)
     } catch (error) {
       console.error("Login failed:", error)
-      Alert.alert("Error", "No se pudo iniciar sesión. Por favor, intenta de nuevo.")
+      showToast(
+        error instanceof Error ? error.message : "Credenciales incorrectas. Verifica tu email y contraseña.",
+        "error",
+        "Error de inicio de sesión",
+      )
     } finally {
       setIsLoggingIn(false)
     }
@@ -106,6 +136,14 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
+
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        title={toast.title}
+        type={toast.type}
+        onDismiss={() => setToast({ ...toast, visible: false })}
+      />
 
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
@@ -167,8 +205,8 @@ export default function LoginScreen() {
             </Animated.View>
 
             <Text style={styles.infoText}>
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et
-              dolore magna aliqua.
+              Accede a tu cuenta para gestionar tu colección de cartas TCG, explorar nuevos productos y conectar con
+              otros coleccionistas.
             </Text>
 
             <View style={styles.signupContainer}>
@@ -180,9 +218,6 @@ export default function LoginScreen() {
               </Link>
             </View>
           </View>
-
-          
-          
         </ScrollView>
       </Animated.View>
     </SafeAreaView>
@@ -316,48 +351,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textDecorationLine: "underline",
     fontFamily: "Poppins_500Medium",
-  },
-  footer: {
-    backgroundColor: "#222323",
-    padding: 20,
-    marginTop: 40,
-    marginHorizontal: -20,
-  },
-  socialIcons: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 20,
-  },
-  iconButton: {
-    marginHorizontal: 16,
-  },
-  footerText: {
-    color: "white",
-    textAlign: "center",
-    fontSize: 14,
-    marginBottom: 16,
-    fontFamily: "Poppins_400Regular",
-  },
-  copyright: {
-    color: "white",
-    textAlign: "center",
-    fontSize: 14,
-    marginBottom: 16,
-    fontFamily: "Poppins_400Regular",
-  },
-  footerLinks: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 16,
-    flexWrap: "wrap",
-  },
-  footerLink: {
-    color: "white",
-    fontSize: 14,
-    fontFamily: "Poppins_400Regular",
-  },
-  footerLinkSeparator: {
-    color: "white",
-    marginHorizontal: 8,
   },
 })

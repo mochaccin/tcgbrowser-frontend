@@ -9,9 +9,10 @@ import {
 import { Feather } from "@expo/vector-icons"
 import { router, useFocusEffect } from "expo-router"
 import { StatusBar } from "expo-status-bar"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useState } from "react"
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Image,
   SafeAreaView,
@@ -20,9 +21,9 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Alert,
 } from "react-native"
 import ProductCarousel from "../../components/ProductCarousel"
+import Toast from "../../components/Toast"
 import { useUserStore } from "../../store/userStore"
 
 const { width, height } = Dimensions.get("window")
@@ -33,32 +34,37 @@ interface UserProfile {
   username: string
   name: string
   email: string
-  location: string
-  nationality: string
+  location?: string
+  nationality?: string
   img_url?: string
   createdAt?: string
   updatedAt?: string
 }
 
-// Interface para los productos publicados
-interface PublishedProduct {
+// Interface for carousel products
+interface CarouselProduct {
   id: string
+  imageUri: string
   title: string
   brand: string
-  imageUri: string
 }
 
 export default function ProfileScreen() {
   // Store hook
-  const { currentUser, updateUser } = useUserStore()
+  const { currentUser, updateUser, getInventoryStats, loadUserInventory, inventory, inventoryLoading } = useUserStore()
 
   // Local state
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
-  const [publishedProducts, setPublishedProducts] = useState<PublishedProduct[]>([])
+  const [carouselProducts, setCarouselProducts] = useState<CarouselProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [productsCount, setProductsCount] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
+  const [toast, setToast] = useState({
+    visible: false,
+    message: "",
+    title: "",
+    type: "success" as "success" | "error" | "info" | "warning",
+  })
 
   // Load Poppins fonts
   const [fontsLoaded] = useFonts({
@@ -67,6 +73,21 @@ export default function ProfileScreen() {
     Poppins_600SemiBold,
     Poppins_700Bold,
   })
+
+  const showToast = (message: string, title: string, type: "success" | "error" | "info" | "warning" = "success") => {
+    setToast({ visible: true, message, title, type })
+  }
+
+  const hideToast = () => {
+    setToast((prev) => ({ ...prev, visible: false }))
+  }
+
+  // Get image URI with fallback
+  const getImageUri = (item: any) => {
+    return (
+      item.images?.large || item.images?.small || item.images?.symbol || "https://images.pokemontcg.io/sv4pt5/1.png"
+    )
+  }
 
   // Cargar datos del usuario
   const loadUserProfile = async (showRefreshIndicator = false) => {
@@ -93,20 +114,58 @@ export default function ProfileScreen() {
       setUserProfile(userData)
 
       // Actualizar el store global con los datos más recientes
-      updateUser(userData)
+      await updateUser({
+        username: userData.username,
+        name: userData.name,
+        email: userData.email,
+        location: userData.location,
+        nationality: userData.nationality,
+        img_url: userData.img_url,
+      })
 
-      // Cargar productos publicados por el usuario (simulado por ahora)
-      await loadUserProducts(userId)
+      // Cargar inventory stats
+      await loadUserInventory()
+
+      // Process inventory items for carousel
+      processInventoryForCarousel()
+
+      if (showRefreshIndicator) {
+        showToast("Perfil actualizado correctamente", "¡Éxito!", "success")
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Error al cargar el perfil"
       console.error("❌ PROFILE: Error cargando perfil:", err)
       setError(errorMsg)
-      if (!showRefreshIndicator) {
+
+      if (showRefreshIndicator) {
+        showToast(errorMsg, "Error", "error")
+      } else {
         Alert.alert("Error", "No se pudo cargar el perfil del usuario")
       }
     } finally {
       setLoading(false)
       setRefreshing(false)
+    }
+  }
+
+  // Process inventory items for carousel
+  const processInventoryForCarousel = () => {
+    try {
+      console.log(`🔍 PROFILE: Procesando ${inventory.length} productos para el carousel`)
+
+      // Transform inventory items to carousel format
+      const transformedProducts: CarouselProduct[] = inventory.map((item) => ({
+        id: item._id,
+        imageUri: getImageUri(item),
+        title: item.name,
+        brand: item.set?.name || item.product_type || "Unknown Set",
+      }))
+
+      setCarouselProducts(transformedProducts)
+      console.log(`✅ PROFILE: ${transformedProducts.length} productos procesados para el carousel`)
+    } catch (err) {
+      console.error("❌ PROFILE: Error procesando productos para carousel:", err)
+      setCarouselProducts([])
     }
   }
 
@@ -119,62 +178,17 @@ export default function ProfileScreen() {
         const showRefresh = userProfile !== null
         loadUserProfile(showRefresh)
       }
-    }, [currentUser._id, userProfile !== null])
+    }, [currentUser._id]),
   )
 
-  // Cargar productos del usuario
-  const loadUserProducts = async (userId: string) => {
-    try {
-      console.log(`🔍 PROFILE: Cargando productos del usuario: ${userId}`)
-
-      // Por ahora usamos datos de ejemplo, pero podrías implementar un endpoint
-      // como GET /products/user/:userId en tu backend
-      const sampleProducts: PublishedProduct[] = [
-        {
-          id: "1",
-          title: "Charizard ex",
-          brand: "SV: Prismatic Evolutions",
-          imageUri: "https://images.pokemontcg.io/sv4pt5/6.png",
-        },
-        {
-          id: "2",
-          title: "Pikachu VMAX",
-          brand: "SWSH: Vivid Voltage",
-          imageUri: "https://images.pokemontcg.io/swsh4/188.png",
-        },
-        {
-          id: "3",
-          title: "Eevee",
-          brand: "SV: Prismatic Evolutions",
-          imageUri: "https://images.pokemontcg.io/sv4pt5/9.png",
-        },
-      ]
-
-      setPublishedProducts(sampleProducts)
-      setProductsCount(sampleProducts.length)
-
-      // Alternativa: Si tienes un endpoint real para productos del usuario
-      /*
-      const productsResponse = await fetch(`http://localhost:3000/products/user/${userId}`)
-      if (productsResponse.ok) {
-        const products = await productsResponse.json()
-        const transformedProducts = products.map((product: any) => ({
-          id: product._id,
-          title: product.name,
-          brand: product.setInfo?.name || 'Unknown Set',
-          imageUri: product.images?.small || product.images?.large || 'https://images.pokemontcg.io/sv4pt5/1.png'
-        }))
-        setPublishedProducts(transformedProducts)
-        setProductsCount(transformedProducts.length)
+  // Effect to update carousel when inventory changes
+  useFocusEffect(
+    useCallback(() => {
+      if (inventory.length > 0) {
+        processInventoryForCarousel()
       }
-      */
-    } catch (err) {
-      console.error("❌ PROFILE: Error cargando productos:", err)
-      // No mostramos error aquí porque no es crítico
-      setPublishedProducts([])
-      setProductsCount(0)
-    }
-  }
+    }, [inventory]),
+  )
 
   // Refresh profile data manualmente
   const refreshProfile = async () => {
@@ -185,18 +199,17 @@ export default function ProfileScreen() {
 
   // Navigate to edit profile
   const navigateToEditProfile = () => {
-    router.push({
-      pathname: "/edit-profile",
-      params: {
-        userId: userProfile?._id,
-        currentName: userProfile?.name,
-        currentUsername: userProfile?.username,
-        currentEmail: userProfile?.email,
-        currentLocation: userProfile?.location,
-        currentNationality: userProfile?.nationality,
-        currentImageUrl: userProfile?.img_url,
-      },
-    })
+    showToast("Edición de perfil próximamente disponible", "Información", "info")
+  }
+
+  // Navigate to add product
+  const navigateToAddProduct = () => {
+    router.push("/add-inventory-item")
+  }
+
+  // Handle product press
+  const handleProductPress = (product: CarouselProduct) => {
+    showToast(`Producto seleccionado: ${product.title}`, "Información", "info")
   }
 
   // Show loading while checking auth state or loading fonts
@@ -222,9 +235,19 @@ export default function ProfileScreen() {
             <Text style={styles.retryButtonText}>Reintentar</Text>
           </TouchableOpacity>
         </View>
+        <Toast
+          visible={toast.visible}
+          message={toast.message}
+          title={toast.title}
+          type={toast.type}
+          onDismiss={hideToast}
+        />
       </SafeAreaView>
     )
   }
+
+  // Get inventory stats
+  const inventoryStats = getInventoryStats()
 
   return (
     <SafeAreaView style={styles.container}>
@@ -240,16 +263,12 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.headerIcon} onPress={navigateToEditProfile}>
             <Feather name="edit-2" size={24} color="black" />
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.headerIcon} 
-            onPress={refreshProfile}
-            disabled={refreshing}
-          >
-            <Feather 
-              name="refresh-cw" 
-              size={20} 
-              color={refreshing ? "#ccc" : "black"} 
-              style={refreshing ? { transform: [{ rotate: '180deg' }] } : {}}
+          <TouchableOpacity style={styles.headerIcon} onPress={refreshProfile} disabled={refreshing}>
+            <Feather
+              name="refresh-cw"
+              size={20}
+              color={refreshing ? "#ccc" : "black"}
+              style={refreshing ? { transform: [{ rotate: "180deg" }] } : {}}
             />
           </TouchableOpacity>
         </View>
@@ -279,18 +298,21 @@ export default function ProfileScreen() {
 
         {/* Social Media Icons */}
         <View style={styles.socialIconsContainer}>
-          <TouchableOpacity style={styles.socialIcon}>
+          <TouchableOpacity
+            style={styles.socialIcon}
+            onPress={() => showToast("Redes sociales próximamente disponibles", "Información", "info")}
+          >
             <Feather name="facebook" size={20} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.socialIcon}>
+          <TouchableOpacity
+            style={styles.socialIcon}
+            onPress={() => showToast("Redes sociales próximamente disponibles", "Información", "info")}
+          >
             <Feather name="instagram" size={20} color="white" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.socialIcon}
-            onPress={() => {
-              // Abrir cliente de email con el email del usuario
-              // En React Native podrías usar Linking.openURL(`mailto:${userProfile.email}`)
-            }}
+            onPress={() => showToast("Cliente de email próximamente disponible", "Información", "info")}
           >
             <Feather name="mail" size={20} color="white" />
           </TouchableOpacity>
@@ -300,8 +322,8 @@ export default function ProfileScreen() {
         <View style={styles.userInfoContainer}>
           <Text style={styles.userName}>{userProfile.name}</Text>
           <Text style={styles.userUsername}>@{userProfile.username}</Text>
-          <Text style={styles.userLocation}>{userProfile.location}</Text>
-          <Text style={styles.userNationality}>{userProfile.nationality}</Text>
+          {userProfile.location && <Text style={styles.userLocation}>{userProfile.location}</Text>}
+          {userProfile.nationality && <Text style={styles.userNationality}>{userProfile.nationality}</Text>}
           <Text style={styles.userEmail}>{userProfile.email}</Text>
         </View>
 
@@ -309,7 +331,7 @@ export default function ProfileScreen() {
         <View style={styles.userStatsContainer}>
           <Feather name="star" size={20} color="#3ac692" />
           <Text style={styles.userStats}>
-            {productsCount} artículo{productsCount !== 1 ? "s" : ""} publicado{productsCount !== 1 ? "s" : ""}
+            {inventoryStats.totalProducts} artículo{inventoryStats.totalProducts !== 1 ? "s" : ""} en inventario
           </Text>
         </View>
 
@@ -328,52 +350,44 @@ export default function ProfileScreen() {
 
         {/* Published Articles */}
         <View style={styles.articlesSection}>
-          <Text style={styles.sectionTitle}>Artículos Publicados</Text>
+          <Text style={styles.sectionTitle}>Artículos en Inventario</Text>
           <Text style={styles.sectionSubtitle}>
-            {publishedProducts.length > 0
-              ? `${publishedProducts.length} artículo${publishedProducts.length !== 1 ? "s" : ""} que este usuario ha publicado`
-              : "Este usuario no ha publicado artículos aún"}
+            {inventoryStats.totalProducts > 0
+              ? `${inventoryStats.totalProducts} artículo${inventoryStats.totalProducts !== 1 ? "s" : ""} en tu inventario personal`
+              : "Tu inventario está vacío"}
           </Text>
 
-          {publishedProducts.length > 0 ? (
-            <ProductCarousel products={publishedProducts} />
-          ) : (
-            <View style={styles.emptyProductsContainer}>
-              <Feather name="package" size={48} color="#ccc" />
-              <Text style={styles.emptyProductsText}>No hay productos publicados</Text>
-              <TouchableOpacity style={styles.addProductButton} onPress={() => router.push("/add-product")}>
-                <Feather name="plus" size={16} color="#6c08dd" />
-                <Text style={styles.addProductButtonText}>Publicar primer producto</Text>
-              </TouchableOpacity>
+          {/* Loading state for carousel */}
+          {inventoryLoading && (
+            <View style={styles.carouselLoadingContainer}>
+              <ActivityIndicator size="small" color="#6c08dd" />
+              <Text style={styles.carouselLoadingText}>Cargando artículos...</Text>
             </View>
           )}
-        </View>
 
-        {/* Account Info */}
-        <View style={styles.accountInfoSection}>
-          <Text style={styles.sectionTitle}>Información de la Cuenta</Text>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Usuario desde:</Text>
-            <Text style={styles.infoValue}>
-              {userProfile.createdAt
-                ? new Date(userProfile.createdAt).toLocaleDateString("es-CL")
-                : "Fecha no disponible"}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>ID de usuario:</Text>
-            <Text style={styles.infoValue}>{userProfile._id}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Última actualización:</Text>
-            <Text style={styles.infoValue}>
-              {userProfile.updatedAt
-                ? new Date(userProfile.updatedAt).toLocaleString("es-CL")
-                : "No disponible"}
-            </Text>
-          </View>
+          {/* Carousel with inventory items */}
+          {!inventoryLoading && carouselProducts.length > 0 ? (
+            <ProductCarousel products={carouselProducts} onProductPress={handleProductPress} />
+          ) : !inventoryLoading && carouselProducts.length === 0 ? (
+            <View style={styles.emptyProductsContainer}>
+              <Feather name="package" size={48} color="#ccc" />
+              <Text style={styles.emptyProductsText}>No hay productos en tu inventario</Text>
+              <TouchableOpacity style={styles.addProductButton} onPress={navigateToAddProduct}>
+                <Feather name="plus" size={16} color="#6c08dd" />
+                <Text style={styles.addProductButtonText}>Agregar primer producto</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
+
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        title={toast.title}
+        type={toast.type}
+        onDismiss={hideToast}
+      />
     </SafeAreaView>
   )
 }
@@ -436,6 +450,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: "#dadada",
+    backgroundColor: "#fff",
   },
   headerTitle: {
     fontSize: 20,
@@ -577,6 +592,19 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_400Regular",
     color: "#5e616c",
     marginBottom: 16,
+  },
+  carouselLoadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+  },
+  carouselLoadingText: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 12,
+    fontFamily: "Poppins_400Regular",
   },
   emptyProductsContainer: {
     alignItems: "center",

@@ -1,25 +1,25 @@
 "use client"
 
 import {
-    Poppins_400Regular,
-    Poppins_500Medium,
-    Poppins_600SemiBold,
-    Poppins_700Bold,
-    useFonts,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  useFonts,
 } from "@expo-google-fonts/poppins"
 import { Feather } from "@expo/vector-icons"
 import { router } from "expo-router"
 import { useEffect, useRef } from "react"
 import {
-    ActivityIndicator,
-    Animated,
-    Easing,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  Easing,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native"
 import { ScrollView } from "react-native-gesture-handler"
 
@@ -103,13 +103,13 @@ export default function ForgotPasswordConfirmationScreen() {
             </Animated.View>
 
             <Text style={styles.infoText}>
-              Si esa cuenta existe, hemos enviado un correo electrónico con un enlace para restablecer la contraseña. Si
-              no lo recibes en unos minutos, por favor revisa tu carpeta de spam.
+              Si esa cuenta existe, hemos enviado un correo electrónico con un código de verificación para restablecer
+              la contraseña. Si no lo recibes en unos minutos, por favor revisa tu carpeta de spam.
             </Text>
 
             <Text style={styles.infoText}>
               Si todavía tienes problemas para acceder a tu cuenta, por favor contacta al soporte al cliente y te
-              ayudaremos.
+              ayudaremos a resolver el problema.
             </Text>
 
             <TouchableOpacity onPress={() => router.push("/login")} style={styles.loginContainer}>
@@ -118,8 +118,6 @@ export default function ForgotPasswordConfirmationScreen() {
           </View>
         </ScrollView>
       </Animated.View>
-
-      
     </SafeAreaView>
   )
 }
@@ -207,45 +205,5 @@ const styles = StyleSheet.create({
     color: "#6c08dd",
     fontSize: 16,
     fontFamily: "Poppins_500Medium",
-  },
-  footer: {
-    backgroundColor: "#222323",
-    padding: 20,
-  },
-  socialIcons: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 20,
-  },
-  iconButton: {
-    marginHorizontal: 16,
-  },
-  footerText: {
-    color: "white",
-    textAlign: "center",
-    fontSize: 14,
-    marginBottom: 16,
-    fontFamily: "Poppins_400Regular",
-  },
-  copyright: {
-    color: "white",
-    textAlign: "center",
-    fontSize: 14,
-    marginBottom: 16,
-    fontFamily: "Poppins_400Regular",
-  },
-  footerLinks: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  footerLink: {
-    color: "white",
-    fontSize: 14,
-    fontFamily: "Poppins_400Regular",
-  },
-  footerLinkSeparator: {
-    color: "white",
-    marginHorizontal: 8,
   },
 })

@@ -86,18 +86,16 @@ interface UserState {
   error: string | null
   inventoryLoading: boolean
   inventoryError: string | null
+  isAuthenticated: boolean
 }
 
-// Estado inicial con tu usuario real
+// Estado inicial con usuario vacío
 const initialState: UserState = {
   currentUser: {
-    _id: "6841145ce0bf7aed1bbed7a1", // Tu ID real
-    username: "chaol",
-    name: "asdasd",
-    email: "asdasd@gmail.com",
-    location: "",
-    nationality: "",
-    img_url: "",
+    _id: "",
+    username: "",
+    name: "",
+    email: "",
   },
   collections: [],
   inventory: [],
@@ -105,6 +103,7 @@ const initialState: UserState = {
   error: null,
   inventoryLoading: false,
   inventoryError: null,
+  isAuthenticated: false,
 }
 
 // URLs de imágenes predefinidas para las collections
@@ -148,6 +147,49 @@ class UserStore {
   private state: UserState = { ...initialState }
   private listeners: Array<() => void> = []
 
+  constructor() {
+    // Check for existing session on initialization
+    if (typeof window !== "undefined") {
+      const token = sessionStorage.getItem("auth_token")
+      const userId = sessionStorage.getItem("user_id")
+
+      if (token && userId) {
+        this.checkExistingSession(userId)
+      }
+    }
+  }
+
+  // Check if there's an existing session and restore user data
+  private async checkExistingSession(userId: string) {
+    try {
+      const response = await fetch(`http://localhost:3000/users/${userId}`)
+      if (response.ok) {
+        const userData = await response.json()
+        this.state.currentUser = {
+          _id: userData._id,
+          username: userData.username,
+          name: userData.name,
+          email: userData.email,
+        }
+        this.state.isAuthenticated = true
+        this.notifyListeners()
+      } else {
+        // Invalid session, clear storage
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("auth_token")
+          sessionStorage.removeItem("user_id")
+        }
+      }
+    } catch (error) {
+      console.error("Failed to restore session:", error)
+      // Clear invalid session data
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("auth_token")
+        sessionStorage.removeItem("user_id")
+      }
+    }
+  }
+
   // Obtener el estado completo
   getState(): UserState {
     return { ...this.state }
@@ -163,54 +205,9 @@ class UserStore {
     return this.state.currentUser._id
   }
 
-  // Actualizar datos del usuario
-  updateUser(userData: Partial<User>): void {
-    console.log("🔄 USER_STORE: Actualizando usuario con:", userData)
-
-    // Actualizar el estado con los nuevos datos
-    this.state.currentUser = {
-      ...this.state.currentUser,
-      ...userData,
-    }
-
-    console.log("✅ USER_STORE: Usuario actualizado:", this.state.currentUser)
-    this.notifyListeners()
-  }
-
-  // Cargar datos completos del usuario
-  async loadUserProfile(): Promise<void> {
-    try {
-      this.setLoading(true)
-      this.setError(null)
-
-      const userId = this.getCurrentUserId()
-      console.log(`🔍 STORE: Cargando perfil del usuario: ${userId}`)
-
-      // Llamada a tu endpoint real
-      const response = await fetch(`http://localhost:3000/users/${userId}`)
-
-      if (!response.ok) {
-        const errorData = await response.text()
-        console.error("❌ STORE: Error response:", errorData)
-        throw new Error(`Error ${response.status}: ${errorData}`)
-      }
-
-      const userData: User = await response.json()
-      console.log("✅ STORE: Datos del usuario cargados:", userData)
-
-      // Actualizar el estado
-      this.state.currentUser = userData
-      this.notifyListeners()
-
-      return userData
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Error al cargar el perfil"
-      this.setError(errorMsg)
-      console.error("❌ STORE: Error cargando perfil:", err)
-      throw new Error(errorMsg)
-    } finally {
-      this.setLoading(false)
-    }
+  // Check if user is authenticated
+  isAuthenticated(): boolean {
+    return this.state.isAuthenticated
   }
 
   // Obtener todas las collections
@@ -231,6 +228,214 @@ class UserStore {
   // Obtener un producto del inventory por ID
   getInventoryProductById(productId: string): Product | undefined {
     return this.state.inventory.find((p) => p._id === productId)
+  }
+
+  // Authentication methods
+  async login(email: string, password: string): Promise<void> {
+    try {
+      console.log("🔐 STORE: Attempting login with:", email)
+
+      // Get all users and find matching credentials
+      const response = await fetch("http://localhost:3000/users")
+      if (!response.ok) {
+        throw new Error("Failed to fetch users")
+      }
+
+      const users = await response.json()
+      const user = users.find((u: any) => u.email === email && u.password === password)
+
+      if (!user) {
+        throw new Error("Invalid email or password")
+      }
+
+      // Update current user in store
+      this.state.currentUser = {
+        _id: user._id,
+        username: user.username,
+        name: user.name,
+        email: user.email,
+      }
+
+      // Set authenticated state
+      this.state.isAuthenticated = true
+
+      // Generate JWT-like token
+      const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }))
+      const payload = btoa(
+        JSON.stringify({
+          sub: user._id,
+          email: user.email,
+          username: user.username,
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours
+        }),
+      )
+      const signature = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36))
+      const token = `${header}.${payload}.${signature}`
+
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("auth_token", token)
+        sessionStorage.setItem("user_id", user._id)
+      }
+
+      console.log("✅ STORE: Login successful for user:", user.username)
+      this.notifyListeners()
+    } catch (error) {
+      console.error("❌ STORE: Login failed:", error)
+      throw error
+    }
+  }
+
+  async register(userData: {
+    username: string
+    name: string
+    email: string
+    password: string
+    nationality?: string
+    location?: string
+    img_url?: string
+  }): Promise<void> {
+    try {
+      console.log("📝 STORE: Attempting registration:", userData.username)
+
+      const response = await fetch("http://localhost:3000/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(userData),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Registration failed")
+      }
+
+      const newUser = await response.json()
+
+      // Update current user in store
+      this.state.currentUser = {
+        _id: newUser._id,
+        username: newUser.username,
+        name: newUser.name,
+        email: newUser.email,
+      }
+
+      // Set authenticated state
+      this.state.isAuthenticated = true
+
+      // Generate JWT-like token
+      const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }))
+      const payload = btoa(
+        JSON.stringify({
+          sub: newUser._id,
+          email: newUser.email,
+          username: newUser.username,
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours
+        }),
+      )
+      const signature = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36))
+      const token = `${header}.${payload}.${signature}`
+
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("auth_token", token)
+        sessionStorage.setItem("user_id", newUser._id)
+      }
+
+      console.log("✅ STORE: Registration successful for user:", newUser.username)
+      this.notifyListeners()
+    } catch (error) {
+      console.error("❌ STORE: Registration failed:", error)
+      throw error
+    }
+  }
+
+  async updatePassword(userId: string, newPassword: string): Promise<void> {
+    try {
+      console.log("🔑 STORE: Updating password for user:", userId)
+
+      const response = await fetch(`http://localhost:3000/users/${userId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password: newPassword }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Password update failed")
+      }
+
+      console.log("✅ STORE: Password updated successfully")
+    } catch (error) {
+      console.error("❌ STORE: Password update failed:", error)
+      throw error
+    }
+  }
+
+  async updateUser(userData: {
+    username?: string
+    name?: string
+    email?: string
+    nationality?: string
+    location?: string
+    img_url?: string
+  }): Promise<void> {
+    try {
+      console.log("📝 STORE: Updating user data:", userData)
+
+      const userId = this.getCurrentUserId()
+      const response = await fetch(`http://localhost:3000/users/${userId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(userData),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "User update failed")
+      }
+
+      const updatedUser = await response.json()
+
+      // Update current user in store
+      this.state.currentUser = {
+        _id: updatedUser._id,
+        username: updatedUser.username,
+        name: updatedUser.name,
+        email: updatedUser.email,
+      }
+
+      console.log("✅ STORE: User updated successfully")
+      this.notifyListeners()
+    } catch (error) {
+      console.error("❌ STORE: User update failed:", error)
+      throw error
+    }
+  }
+
+  logout(): void {
+    this.state.currentUser = {
+      _id: "",
+      username: "",
+      name: "",
+      email: "",
+    }
+    this.state.isAuthenticated = false
+    this.state.collections = []
+    this.state.inventory = []
+
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("auth_token")
+      sessionStorage.removeItem("user_id")
+    }
+
+    console.log("🚪 STORE: User logged out")
+    this.notifyListeners()
   }
 
   // ==================== COLLECTIONS METHODS ====================
@@ -368,94 +573,31 @@ class UserStore {
     }
   }
 
-  // 🔧 MÉTODO MEJORADO: Eliminar collection con mejor debugging
+  // Eliminar collection
   async deleteCollection(collectionId: string): Promise<void> {
     try {
-      console.log(`🗑️ STORE: === INICIANDO ELIMINACIÓN DE COLLECTION ===`)
-      console.log(`🗑️ STORE: Collection ID: ${collectionId}`)
-      console.log(`🗑️ STORE: Collections actuales en store: ${this.state.collections.length}`)
+      console.log(`🗑️ STORE: Eliminando collection: ${collectionId}`)
 
-      // Verificar que la collection existe en el store local
-      const collectionToDelete = this.state.collections.find((c) => c._id === collectionId)
-      if (!collectionToDelete) {
-        console.error(`❌ STORE: Collection ${collectionId} no encontrada en store local`)
-        throw new Error("Collection no encontrada")
-      }
-
-      console.log(`🔍 STORE: Collection encontrada: "${collectionToDelete.name}"`)
-
-      // Construir URL del endpoint
-      const url = `http://localhost:3000/collections/${collectionId}`
-      console.log(`🌐 STORE: URL del endpoint: ${url}`)
-      console.log(`📤 STORE: Método: DELETE`)
-
-      // Realizar la llamada al backend
-      console.log(`📡 STORE: Enviando request DELETE...`)
-      const response = await fetch(url, {
+      // Llamada a tu endpoint para eliminar collection
+      const response = await fetch(`http://localhost:3000/collections/${collectionId}`, {
         method: "DELETE",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
       })
 
-      console.log(`📡 STORE: Response recibida:`)
-      console.log(`   Status: ${response.status}`)
-      console.log(`   Status Text: ${response.statusText}`)
-      console.log(`   OK: ${response.ok}`)
-      console.log(`   Headers:`, Object.fromEntries(response.headers.entries()))
-
-      // Leer el cuerpo de la respuesta
-      let responseText = ""
-      let responseData = null
-
-      try {
-        responseText = await response.text()
-        console.log(`📄 STORE: Response body (raw):`, responseText)
-
-        if (responseText.trim()) {
-          responseData = JSON.parse(responseText)
-          console.log(`📄 STORE: Response body (parsed):`, responseData)
-        }
-      } catch (parseError) {
-        console.warn(`⚠️ STORE: No se pudo parsear respuesta como JSON:`, parseError)
-      }
-
-      // Verificar si la respuesta fue exitosa
       if (!response.ok) {
-        let errorMessage = `Error ${response.status}: ${response.statusText}`
-        if (responseData && responseData.message) {
-          errorMessage = responseData.message
-        } else if (responseText) {
-          errorMessage = responseText
-        }
-
-        console.error(`❌ STORE: Error del servidor: ${errorMessage}`)
-        throw new Error(errorMessage)
+        const errorData = await response.text()
+        console.error("❌ STORE: Error response:", errorData)
+        throw new Error(`Error ${response.status}: ${errorData}`)
       }
 
-      // Si llegamos aquí, la eliminación fue exitosa
-      console.log(`✅ STORE: Collection ${collectionId} eliminada exitosamente del servidor`)
+      console.log(`✅ STORE: Collection ${collectionId} eliminada`)
 
-      // Actualizar el estado local
-      const collectionsBeforeUpdate = this.state.collections.length
+      // Actualizar el estado
       this.state.collections = this.state.collections.filter((c) => c._id !== collectionId)
-      const collectionsAfterUpdate = this.state.collections.length
-
-      console.log(`🔄 STORE: Estado local actualizado:`)
-      console.log(`   Collections antes: ${collectionsBeforeUpdate}`)
-      console.log(`   Collections después: ${collectionsAfterUpdate}`)
-      console.log(`   Collections eliminadas: ${collectionsBeforeUpdate - collectionsAfterUpdate}`)
-
-      // Notificar a los listeners
       this.notifyListeners()
-      console.log(`✅ STORE: === ELIMINACIÓN COMPLETADA EXITOSAMENTE ===`)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Error al eliminar collection"
       this.setError(errorMsg)
-      console.error("❌ STORE: === ERROR EN ELIMINACIÓN ===")
       console.error("❌ STORE: Error eliminando collection:", err)
-      console.error("❌ STORE: Stack trace:", err instanceof Error ? err.stack : "No stack trace")
       throw new Error(errorMsg)
     }
   }
@@ -493,95 +635,29 @@ class UserStore {
     }
   }
 
-  // 🔧 MÉTODO CORREGIDO: Remover carta de collection
+  // Remover carta de collection
   async removeCardFromCollection(collectionId: string, cardId: string): Promise<void> {
     try {
       console.log(`➖ STORE: Removiendo carta ${cardId} de collection ${collectionId}`)
-      console.log(`🔍 STORE: Estado actual antes de eliminar:`)
-      console.log(`   Collections en store: ${this.state.collections.length}`)
 
-      const targetCollection = this.state.collections.find((c) => c._id === collectionId)
-      if (targetCollection) {
-        console.log(`   Collection encontrada: ${targetCollection.name}`)
-        console.log(`   Cards en collection: ${targetCollection.cards?.length || 0}`)
-        console.log(`   Card count: ${targetCollection.card_count}`)
-      } else {
-        console.warn(`⚠️ STORE: Collection ${collectionId} no encontrada en store local`)
-      }
-
-      // 🔧 USAR EL NUEVO ENDPOINT CON PARÁMETROS DE RUTA
-      const url = `http://localhost:3000/collections/${collectionId}/remove/${cardId}`
-      console.log(`🌐 STORE: Llamando endpoint: ${url}`)
-      console.log(`📤 STORE: Method: DELETE`)
-      console.log(`📤 STORE: Headers: Accept: application/json`)
-
-      const response = await fetch(url, {
+      // Llamada a tu endpoint para remover carta
+      const response = await fetch(`http://localhost:3000/collections/${collectionId}/remove`, {
         method: "DELETE",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardId }),
       })
-
-      console.log(`📡 STORE: Response recibida:`)
-      console.log(`   Status: ${response.status}`)
-      console.log(`   Status Text: ${response.statusText}`)
-      console.log(`   OK: ${response.ok}`)
-      console.log(`   Headers:`, Object.fromEntries(response.headers.entries()))
-
-      // Leer respuesta completa
-      let responseText = ""
-      let responseData = null
-
-      try {
-        responseText = await response.text()
-        console.log(`📄 STORE: Response body (raw):`, responseText)
-
-        if (responseText.trim()) {
-          responseData = JSON.parse(responseText)
-          console.log(`📄 STORE: Response body (parsed):`, responseData)
-        }
-      } catch (parseError) {
-        console.warn(`⚠️ STORE: No se pudo parsear respuesta:`, parseError)
-      }
 
       if (!response.ok) {
-        let errorMessage = `Error ${response.status}: ${response.statusText}`
-        if (responseData && responseData.message) {
-          errorMessage = responseData.message
-        } else if (responseText) {
-          errorMessage = responseText
-        }
-
-        console.error(`❌ STORE: Error del servidor: ${errorMessage}`)
-        throw new Error(errorMessage)
+        const errorData = await response.text()
+        console.error("❌ STORE: Error response:", errorData)
+        throw new Error(`Error ${response.status}: ${errorData}`)
       }
 
-      // Si la respuesta es exitosa, actualizar el estado local
-      console.log(`✅ STORE: Carta ${cardId} removida exitosamente del servidor`)
+      const updatedCollection: Collection = await response.json()
+      console.log(`✅ STORE: Carta ${cardId} removida. Nuevo card_count: ${updatedCollection.card_count}`)
 
-      // Actualizar el estado local
-      const updatedCollections = this.state.collections.map((c) => {
-        if (c._id === collectionId) {
-          const updatedCards = c.cards.filter((card) => card.product_id !== cardId)
-          const updatedCollection = {
-            ...c,
-            cards: updatedCards,
-            card_count: updatedCards.length,
-          }
-
-          console.log(`🔄 STORE: Collection actualizada localmente:`)
-          console.log(`   Cards antes: ${c.cards.length}`)
-          console.log(`   Cards después: ${updatedCards.length}`)
-          console.log(`   Card count actualizado: ${updatedCollection.card_count}`)
-
-          return updatedCollection
-        }
-        return c
-      })
-
-      this.state.collections = updatedCollections
-      console.log(`✅ STORE: Estado local actualizado`)
+      // Actualizar el estado
+      this.state.collections = this.state.collections.map((c) => (c._id === collectionId ? updatedCollection : c))
 
       this.notifyListeners()
     } catch (err) {
@@ -823,6 +899,7 @@ class UserStore {
   debug(): void {
     console.log("🔍 UserStore State:", {
       currentUser: this.state.currentUser,
+      isAuthenticated: this.state.isAuthenticated,
       collectionsCount: this.state.collections.length,
       collections: this.state.collections.map((c) => ({
         _id: c._id,
@@ -869,14 +946,13 @@ export const useUserStore = () => {
   return {
     // User data
     currentUser: state.currentUser,
+    isAuthenticated: state.isAuthenticated,
     getCurrentUserId: () => userStore.getCurrentUserId(),
 
     // Collections
     collections: state.collections,
     loading: state.loading,
     error: state.error,
-    updateUser: (userData: Partial<User>) => userStore.updateUser(userData),
-    loadUserProfile: () => userStore.loadUserProfile(),
     loadUserCollections: () => userStore.loadUserCollections(),
     createCollection: (name: string, img_url: string) => userStore.createCollection(name, img_url),
     toggleFavorite: (collectionId: string) => userStore.toggleFavorite(collectionId),
@@ -899,6 +975,13 @@ export const useUserStore = () => {
     getInventoryByType: (productType: string) => userStore.getInventoryByType(productType),
     getInventoryForSale: () => userStore.getInventoryForSale(),
     getInventoryStats: () => userStore.getInventoryStats(),
+
+    // Authentication
+    login: (email: string, password: string) => userStore.login(email, password),
+    register: (userData: any) => userStore.register(userData),
+    updateUser: (userData: any) => userStore.updateUser(userData),
+    updatePassword: (userId: string, newPassword: string) => userStore.updatePassword(userId, newPassword),
+    logout: () => userStore.logout(),
 
     // Debug
     debug: () => userStore.debug(),

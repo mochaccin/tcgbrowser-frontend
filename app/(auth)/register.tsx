@@ -1,37 +1,54 @@
 "use client"
 
 import {
-    Poppins_400Regular,
-    Poppins_500Medium,
-    Poppins_600SemiBold,
-    Poppins_700Bold,
-    useFonts,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  useFonts,
 } from "@expo-google-fonts/poppins"
 import { Feather } from "@expo/vector-icons"
 import * as ImagePicker from "expo-image-picker"
 import { Link, router } from "expo-router"
 import { useEffect, useRef, useState } from "react"
 import {
-    ActivityIndicator,
-    Animated,
-    Easing,
-    Image,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  Easing,
+  Image,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native"
 import { ScrollView } from "react-native-gesture-handler"
+import Toast from "../../components/Toast"
+import { useUserStore } from "../../store/userStore"
 
 export default function RegisterScreen() {
   const [username, setUsername] = useState("Jota")
   const [name, setName] = useState("Joaquin Escanilla Arauco")
+  const [email, setEmail] = useState("joaquin@example.com")
+  const [password, setPassword] = useState("password123")
   const [nationality, setNationality] = useState("Chileno")
   const [location, setLocation] = useState("Licán Ray")
   const [profileImage, setProfileImage] = useState<string | null>(null)
+  const [isRegistering, setIsRegistering] = useState(false)
+  const [toast, setToast] = useState<{
+    visible: boolean
+    message: string
+    title?: string
+    type: "success" | "error" | "info" | "warning"
+  }>({
+    visible: false,
+    message: "",
+    type: "success",
+  })
+
+  const { register } = useUserStore()
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -61,11 +78,48 @@ export default function RegisterScreen() {
     )
   }
 
-  const handleRegister = () => {
-    // Implement registration logic here
-    console.log("Register with:", username, name, nationality, location)
-    // Navigate to the main app after successful registration
-    router.replace("/")
+  const showToast = (message: string, type: "success" | "error" | "info" | "warning", title?: string) => {
+    setToast({ visible: true, message, type, title })
+  }
+
+  const handleRegister = async () => {
+    try {
+      setIsRegistering(true)
+      console.log("Attempting registration:", username, name, email)
+
+      // Validate required fields
+      if (!username.trim() || !name.trim() || !email.trim() || !password.trim()) {
+        showToast("Por favor, completa todos los campos requeridos.", "error", "Campos incompletos")
+        return
+      }
+
+      // Call the register function from user store
+      await register({
+        username: username.trim(),
+        name: name.trim(),
+        email: email.trim(),
+        password: password.trim(),
+        nationality: nationality.trim() || undefined,
+        location: location.trim() || undefined,
+        img_url: profileImage || undefined,
+      })
+
+      showToast("Cuenta creada exitosamente. ¡Bienvenido a TCG Browser!", "success", "¡Registro exitoso!")
+
+      // Delay navigation to show toast
+      setTimeout(() => {
+        router.replace("/")
+      }, 1500)
+    } catch (error) {
+      console.error("Registration failed:", error)
+      showToast(
+        error instanceof Error ? error.message : "No se pudo crear la cuenta. Verifica que el email no esté en uso.",
+        "error",
+        "Error de registro",
+      )
+    } finally {
+      setIsRegistering(false)
+    }
   }
 
   const handleImagePick = async () => {
@@ -83,26 +137,38 @@ export default function RegisterScreen() {
 
   // Button press animation
   const onPressIn = () => {
-    Animated.timing(buttonScale, {
-      toValue: 0.95,
-      duration: 100,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start()
+    if (!isRegistering) {
+      Animated.timing(buttonScale, {
+        toValue: 0.95,
+        duration: 100,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }).start()
+    }
   }
 
   const onPressOut = () => {
-    Animated.timing(buttonScale, {
-      toValue: 1,
-      duration: 100,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start()
+    if (!isRegistering) {
+      Animated.timing(buttonScale, {
+        toValue: 1,
+        duration: 100,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }).start()
+    }
   }
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
+
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        title={toast.title}
+        type={toast.type}
+        onDismiss={() => setToast({ ...toast, visible: false })}
+      />
 
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
@@ -118,7 +184,7 @@ export default function RegisterScreen() {
           <Text style={styles.title}>Registrarse en TCG Browser</Text>
 
           {/* Profile Image */}
-          <TouchableOpacity style={styles.profileImageContainer} onPress={handleImagePick}>
+          <TouchableOpacity style={styles.profileImageContainer} onPress={handleImagePick} disabled={isRegistering}>
             {profileImage ? (
               <Image source={{ uri: profileImage }} style={styles.profileImage} />
             ) : (
@@ -133,40 +199,74 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           <View style={styles.formContainer}>
-            <Text style={styles.label}>Nombre de usuario</Text>
-            <TextInput style={styles.input} value={username} onChangeText={setUsername} autoCapitalize="none" />
+            <Text style={styles.label}>Nombre de usuario *</Text>
+            <TextInput
+              style={styles.input}
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+              editable={!isRegistering}
+            />
 
-            <Text style={styles.label}>Nombre</Text>
-            <TextInput style={styles.input} value={name} onChangeText={setName} />
+            <Text style={styles.label}>Nombre *</Text>
+            <TextInput style={styles.input} value={name} onChangeText={setName} editable={!isRegistering} />
+
+            <Text style={styles.label}>Correo Electrónico *</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!isRegistering}
+            />
+
+            <Text style={styles.label}>Contraseña *</Text>
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              editable={!isRegistering}
+            />
 
             <Text style={styles.label}>Nacionalidad</Text>
-            <TextInput style={styles.input} value={nationality} onChangeText={setNationality} />
+            <TextInput
+              style={styles.input}
+              value={nationality}
+              onChangeText={setNationality}
+              editable={!isRegistering}
+            />
 
             <Text style={styles.label}>Localidad</Text>
-            <TextInput style={styles.input} value={location} onChangeText={setLocation} />
+            <TextInput style={styles.input} value={location} onChangeText={setLocation} editable={!isRegistering} />
 
             <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
               <TouchableOpacity
-                style={styles.registerButton}
+                style={[styles.registerButton, isRegistering && styles.registerButtonDisabled]}
                 onPress={handleRegister}
                 onPressIn={onPressIn}
                 onPressOut={onPressOut}
+                disabled={isRegistering}
               >
-                <Text style={styles.registerButtonText}>Registrarse</Text>
+                {isRegistering ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.registerButtonText}>Registrarse</Text>
+                )}
               </TouchableOpacity>
             </Animated.View>
 
             <View style={styles.loginContainer}>
               <Text style={styles.loginText}>¿Ya tienes una cuenta?</Text>
               <Link href="/login" asChild>
-                <TouchableOpacity>
+                <TouchableOpacity disabled={isRegistering}>
                   <Text style={styles.loginLink}>Iniciar sesión aquí</Text>
                 </TouchableOpacity>
               </Link>
             </View>
           </View>
-
-        
         </ScrollView>
       </Animated.View>
     </SafeAreaView>
@@ -288,6 +388,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
     marginBottom: 24,
+    minHeight: 56,
+    justifyContent: "center",
+  },
+  registerButtonDisabled: {
+    backgroundColor: "#b794e5",
   },
   registerButtonText: {
     color: "white",
@@ -308,48 +413,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textDecorationLine: "underline",
     fontFamily: "Poppins_500Medium",
-  },
-  footer: {
-    backgroundColor: "#222323",
-    padding: 20,
-    marginTop: 40,
-    marginHorizontal: -20,
-  },
-  socialIcons: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 20,
-  },
-  iconButton: {
-    marginHorizontal: 16,
-  },
-  footerText: {
-    color: "white",
-    textAlign: "center",
-    fontSize: 14,
-    marginBottom: 16,
-    fontFamily: "Poppins_400Regular",
-  },
-  copyright: {
-    color: "white",
-    textAlign: "center",
-    fontSize: 14,
-    marginBottom: 16,
-    fontFamily: "Poppins_400Regular",
-  },
-  footerLinks: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 16,
-    flexWrap: "wrap",
-  },
-  footerLink: {
-    color: "white",
-    fontSize: 14,
-    fontFamily: "Poppins_400Regular",
-  },
-  footerLinkSeparator: {
-    color: "white",
-    marginHorizontal: 8,
   },
 })

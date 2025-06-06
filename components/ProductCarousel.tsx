@@ -52,6 +52,11 @@ export default function ProductCarousel({ products, onProductPress }: ProductCar
     }
   }
 
+  // Don't render if no products
+  if (!products || products.length === 0) {
+    return null
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -83,16 +88,18 @@ export default function ProductCarousel({ products, onProductPress }: ProductCar
       </ScrollView>
 
       {/* Pagination dots */}
-      <View style={styles.pagination}>
-        {products.map((_, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[styles.paginationDot, index === activeIndex && styles.activeDot]}
-            onPress={() => scrollToCard(index)}
-            activeOpacity={0.7}
-          />
-        ))}
-      </View>
+      {products.length > 1 && (
+        <View style={styles.pagination}>
+          {products.map((_, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[styles.paginationDot, index === activeIndex && styles.activeDot]}
+              onPress={() => scrollToCard(index)}
+              activeOpacity={0.7}
+            />
+          ))}
+        </View>
+      )}
     </View>
   )
 }
