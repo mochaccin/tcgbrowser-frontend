@@ -139,12 +139,6 @@ export default function AddCollectionScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardAvoidingView}>
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.formContainer}>
-            {/* Debug Info */}
-            <View style={styles.debugContainer}>
-              <Text style={styles.debugText}>Usuario: {currentUser._id}</Text>
-              <Text style={styles.debugText}>Username: {currentUser.username}</Text>
-              <Text style={styles.debugText}>Name: {currentUser.name}</Text>
-            </View>
 
             {/* Collection Name Input */}
             <Text style={styles.inputLabel}>Nombre de la colección</Text>

@@ -5,7 +5,10 @@ import { router } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { useEffect, useState } from "react"
 import {
+  ActivityIndicator,
+  Alert,
   Image,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -13,9 +16,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator,
-  Alert,
-  Platform,
 } from "react-native"
 import { useUserStore, type Collection } from "../../store/userStore"
 
@@ -175,13 +175,6 @@ export default function MyCollectionsScreen() {
             <AntDesign name="addfolder" size={20} color="black" />
           </TouchableOpacity>
         </View>
-
-        {/* Error message */}
-        {error && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
 
         {/* Collections List */}
         <View style={styles.collectionsContainer}>
