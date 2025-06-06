@@ -15,6 +15,7 @@ import {
   View,
   ActivityIndicator,
   Alert,
+  Platform,
 } from "react-native"
 import { useUserStore, type Collection } from "../../store/userStore"
 
@@ -22,6 +23,7 @@ export default function MyCollectionsScreen() {
   // State for search query and filtered collections
   const [searchQuery, setSearchQuery] = useState("")
   const [filteredCollections, setFilteredCollections] = useState<Collection[]>([])
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // Hook para el store del usuario
   const { currentUser, collections, loading, error, loadUserCollections, toggleFavorite, deleteCollection, debug } =
@@ -30,9 +32,6 @@ export default function MyCollectionsScreen() {
   // Cargar las collections del usuario al iniciar
   useEffect(() => {
     console.log("🔄 SCREEN: Iniciando carga de collections...")
-    console.log("🔄 SCREEN: Usuario actual:", currentUser._id)
-    console.log("🔄 SCREEN: Collections en store antes de cargar:", collections.length)
-
     loadUserCollections()
       .then(() => {
         console.log("✅ SCREEN: Carga completada exitosamente")
@@ -41,20 +40,6 @@ export default function MyCollectionsScreen() {
         console.error("❌ SCREEN: Error en carga:", error)
       })
   }, [])
-
-  // Monitorear cambios en las collections
-  useEffect(() => {
-    console.log("📊 SCREEN: Collections actualizadas en pantalla:", {
-      total: collections.length,
-      collections: collections.map((c, index) => ({
-        index,
-        id: c._id,
-        name: c.name,
-        cardCount: c.card_count,
-        hasCards: (c.cards?.length || 0) > 0,
-      })),
-    })
-  }, [collections])
 
   // Filter collections when search query changes
   useEffect(() => {
@@ -78,45 +63,48 @@ export default function MyCollectionsScreen() {
   }
 
   // Handle toggle favorite
-  const handleToggleFavorite = async (collectionId: string, event: any) => {
-    // Prevent navigation when tapping favorite button
-    event.stopPropagation()
-
+  const handleToggleFavorite = async (collectionId: string) => {
     try {
       console.log(`🌟 Toggling favorite para collection: ${collectionId}`)
       await toggleFavorite(collectionId)
       console.log(`✅ Favorito actualizado para collection: ${collectionId}`)
     } catch (error) {
       console.error("❌ Error toggling favorite:", error)
-      Alert.alert("Error", "No se pudo actualizar el estado de favorito")
     }
   }
 
-  // Handle delete collection
-  const handleDeleteCollection = (collectionId: string, collectionName: string, event: any) => {
-    // Prevent navigation when tapping delete button
-    event.stopPropagation()
+  // 🔧 MÉTODO SIMPLIFICADO: Eliminar directamente sin confirmación
+  const handleDeleteCollection = async (collectionId: string, collectionName: string) => {
+    try {
+      console.log(`🗑️ SCREEN: Eliminando collection: ${collectionId} - ${collectionName}`)
 
-    Alert.alert("Eliminar Colección", `¿Estás seguro de que quieres eliminar "${collectionName}"?`, [
-      {
-        text: "Cancelar",
-        style: "cancel",
-      },
-      {
-        text: "Eliminar",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            console.log(`🗑️ Eliminando collection: ${collectionId}`)
-            await deleteCollection(collectionId)
-            console.log(`✅ Collection eliminada: ${collectionId}`)
-          } catch (error) {
-            console.error("❌ Error eliminando collection:", error)
-            Alert.alert("Error", "No se pudo eliminar la colección")
-          }
-        },
-      },
-    ])
+      // Mostrar indicador de carga
+      setDeletingId(collectionId)
+
+      // Llamar al método del store para eliminar
+      await deleteCollection(collectionId)
+
+      console.log(`✅ SCREEN: Collection eliminada exitosamente: ${collectionId}`)
+
+      // No mostrar alerta de éxito, solo log
+    } catch (error) {
+      console.error("❌ SCREEN: Error eliminando collection:", error)
+      console.error("❌ SCREEN: Error details:", {
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : "No stack trace",
+      })
+
+      // Solo mostrar alerta de error en móvil si es necesario
+      if (Platform.OS !== "web") {
+        Alert.alert(
+          "Error",
+          `No se pudo eliminar la colección "${collectionName}". ${error instanceof Error ? error.message : "Error desconocido"}`,
+        )
+      }
+    } finally {
+      // Ocultar indicador de carga
+      setDeletingId(null)
+    }
   }
 
   // Loading state
@@ -124,8 +112,6 @@ export default function MyCollectionsScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar style="dark" />
-
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <Feather name="arrow-left" size={24} color="black" />
@@ -133,7 +119,6 @@ export default function MyCollectionsScreen() {
           <Text style={styles.headerTitle}>Mis colecciones</Text>
           <View style={styles.headerRight} />
         </View>
-
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#6c08dd" />
           <Text style={styles.loadingText}>Cargando colecciones...</Text>
@@ -202,64 +187,79 @@ export default function MyCollectionsScreen() {
         <View style={styles.collectionsContainer}>
           {filteredCollections.length > 0 ? (
             filteredCollections.map((collection) => (
-              <TouchableOpacity
-                key={collection._id}
-                style={styles.collectionCard}
-                onPress={() => navigateToCollection(collection._id!)}
-              >
-                <Image
-                  source={{
-                    uri: collection.img_url || "https://images.pokemontcg.io/sv4pt5/1.png",
-                  }}
-                  style={styles.collectionImage}
-                />
-                <LinearGradient
-                  colors={["rgba(108, 8, 221, 0)", "rgba(107, 8, 221, 1)"]}
-                  locations={[0.2, 1]}
-                  style={styles.gradient}
-                />
-                <View style={styles.collectionContent}>
-                  <View style={styles.topRow}>
-                    <View style={styles.collectionCardCount}>
-                      <Text style={styles.cardCountText}>
-                        {collection.card_count || 0} carta{(collection.card_count || 0) !== 1 ? "s" : ""}
+              <View key={collection._id} style={styles.collectionCard}>
+                <TouchableOpacity
+                  style={styles.collectionTouchable}
+                  onPress={() => navigateToCollection(collection._id!)}
+                  activeOpacity={0.8}
+                >
+                  <Image
+                    source={{
+                      uri: collection.img_url || "https://images.pokemontcg.io/sv4pt5/1.png",
+                    }}
+                    style={styles.collectionImage}
+                  />
+                  <LinearGradient
+                    colors={["rgba(108, 8, 221, 0)", "rgba(107, 8, 221, 1)"]}
+                    locations={[0.2, 1]}
+                    style={styles.gradient}
+                  />
+                  <View style={styles.collectionContent}>
+                    <View style={styles.topRow}>
+                      <View style={styles.collectionCardCount}>
+                        <Text style={styles.cardCountText}>
+                          {collection.card_count || 0} carta{(collection.card_count || 0) !== 1 ? "s" : ""}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.collectionInfo}>
+                      <Text style={styles.collectionName}>{collection.name}</Text>
+                      {collection.is_favorite && (
+                        <View style={styles.favoriteContainer}>
+                          <Feather name="star" size={14} color="#FFD700" />
+                          <Text style={styles.favoriteText}>Colección favorita</Text>
+                        </View>
+                      )}
+                      <Text style={styles.createdDate}>
+                        Creada:{" "}
+                        {collection.createdAt
+                          ? new Date(collection.createdAt).toLocaleDateString()
+                          : "Fecha desconocida"}
                       </Text>
                     </View>
-                    <View style={styles.actionButtons}>
-                      <TouchableOpacity
-                        style={styles.favoriteButton}
-                        onPress={(event) => handleToggleFavorite(collection._id!, event)}
-                      >
-                        <Feather
-                          name="star"
-                          size={16}
-                          color={collection.is_favorite ? "#FFD700" : "#fff"}
-                          // Nota: React Native no soporta fill, pero el color ya indica el estado
-                        />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.deleteButton}
-                        onPress={(event) => handleDeleteCollection(collection._id!, collection.name, event)}
-                      >
-                        <Feather name="trash-2" size={14} color="#ff6b6b" />
-                      </TouchableOpacity>
-                    </View>
                   </View>
-                  <View style={styles.collectionInfo}>
-                    <Text style={styles.collectionName}>{collection.name}</Text>
-                    {collection.is_favorite && (
-                      <View style={styles.favoriteContainer}>
-                        <Feather name="star" size={14} color="#FFD700" />
-                        <Text style={styles.favoriteText}>Colección favorita</Text>
-                      </View>
+                </TouchableOpacity>
+
+                {/* Botones de acción */}
+                <View style={styles.actionButtonsContainer}>
+                  <TouchableOpacity
+                    style={styles.favoriteButton}
+                    onPress={() => {
+                      console.log("🌟 Botón favorito presionado para:", collection._id)
+                      handleToggleFavorite(collection._id!)
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="star" size={16} color={collection.is_favorite ? "#FFD700" : "#fff"} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.deleteButton, deletingId === collection._id && styles.deleteButtonLoading]}
+                    onPress={() => {
+                      console.log("🗑️ Botón eliminar presionado para:", collection._id, collection.name)
+                      handleDeleteCollection(collection._id!, collection.name)
+                    }}
+                    disabled={deletingId === collection._id}
+                    activeOpacity={0.7}
+                  >
+                    {deletingId === collection._id ? (
+                      <ActivityIndicator size={16} color="#fff" />
+                    ) : (
+                      <Feather name="x" size={16} color="#fff" />
                     )}
-                    <Text style={styles.createdDate}>
-                      Creada:{" "}
-                      {collection.createdAt ? new Date(collection.createdAt).toLocaleDateString() : "Fecha desconocida"}
-                    </Text>
-                  </View>
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
+              </View>
             ))
           ) : collections.length > 0 ? (
             <View style={styles.noResultsContainer}>
@@ -275,7 +275,6 @@ export default function MyCollectionsScreen() {
             </View>
           )}
 
-          {/* Create New Collection Button - Always show this */}
           <TouchableOpacity style={styles.createCollectionButton} onPress={() => router.push("/add-collection")}>
             <Feather name="plus" size={24} color="#6c08dd" />
             <Text style={styles.createCollectionText}>Crear nueva colección</Text>
@@ -315,7 +314,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   headerRight: {
-    width: 24, // To balance the header
+    width: 24,
   },
   searchContainer: {
     flexDirection: "row",
@@ -399,6 +398,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    position: "relative",
+  },
+  collectionTouchable: {
+    width: "100%",
+    height: "100%",
   },
   collectionImage: {
     width: "100%",
@@ -428,19 +432,34 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#000",
   },
-  actionButtons: {
+  actionButtonsContainer: {
+    position: "absolute",
+    top: 15,
+    right: 15,
     flexDirection: "row",
     gap: 8,
+    zIndex: 10,
   },
   favoriteButton: {
     backgroundColor: "rgba(0, 0, 0, 0.3)",
     padding: 8,
     borderRadius: 20,
+    minWidth: 32,
+    minHeight: 32,
+    justifyContent: "center",
+    alignItems: "center",
   },
   deleteButton: {
-    backgroundColor: "rgba(255, 107, 107, 0.9)",
+    backgroundColor: "#ff4444",
     padding: 8,
     borderRadius: 20,
+    minWidth: 32,
+    minHeight: 32,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deleteButtonLoading: {
+    backgroundColor: "#ff6666",
   },
   collectionInfo: {
     justifyContent: "flex-end",

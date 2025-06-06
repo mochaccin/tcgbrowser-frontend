@@ -2,7 +2,7 @@
 import { Feather } from "@expo/vector-icons"
 import { router, useLocalSearchParams } from "expo-router"
 import { StatusBar } from "expo-status-bar"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import {
   Image,
   Modal,
@@ -16,6 +16,8 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native"
+// Importar useFocusEffect para recargar datos cuando la pantalla vuelve a estar en foco
+import { useFocusEffect } from "@react-navigation/native"
 import { useUserStore, userStore, type Collection } from "../../store/userStore"
 
 // Interfaz para las cartas de la API
@@ -49,6 +51,8 @@ interface Card {
   name: string
   brand: string
   price: string
+  priceNumeric: number // Para cálculos en CLP
+  originalPriceUSD: number // Precio original en USD para referencia
   imageUri: string
   hp: string
   types: string[]
@@ -58,6 +62,66 @@ interface Card {
 
 // Sort options
 type SortOption = "name_asc" | "name_desc" | "price_asc" | "price_desc"
+
+// Configuración de conversión de moneda
+const EXCHANGE_RATE_USD_TO_CLP = 950 // 1 USD = 950 CLP (tasa estática)
+const MIN_PRICE_CLP = 100 // Precio mínimo en CLP
+const MIN_PRICE_CHEAP_CARDS_CLP = 500 // Precio mínimo para cartas muy baratas
+
+// 🔧 CONFIGURACIÓN DEL SERVIDOR
+const API_BASE_URL = "http://localhost:3000"
+
+/**
+ * Convierte un precio de USD a CLP usando la tasa de cambio estática
+ * @param usdPrice Precio en USD
+ * @returns Precio en CLP redondeado
+ */
+const convertUSDToCLP = (usdPrice: number): number => {
+  // Validar que el precio sea un número válido
+  if (typeof usdPrice !== "number" || isNaN(usdPrice) || usdPrice < 0) {
+    console.warn(`⚠️ PRICE_CONVERSION: Precio USD inválido: ${usdPrice}, usando precio mínimo`)
+    return MIN_PRICE_CLP
+  }
+
+  let clpPrice = usdPrice * EXCHANGE_RATE_USD_TO_CLP
+
+  // Aplicar precios mínimos según el valor original
+  if (usdPrice < 0.1) {
+    // Para cartas muy baratas (menos de $0.10 USD), establecer un precio mínimo más realista
+    clpPrice = Math.max(clpPrice, MIN_PRICE_CHEAP_CARDS_CLP)
+  } else {
+    // Para otras cartas, aplicar precio mínimo general
+    clpPrice = Math.max(clpPrice, MIN_PRICE_CLP)
+  }
+
+  return Math.round(clpPrice)
+}
+
+/**
+ * Formatea un precio en CLP con separadores de miles
+ * @param clpPrice Precio en CLP
+ * @returns String formateado con símbolo de peso chileno
+ */
+const formatCLPPrice = (clpPrice: number): string => {
+  if (typeof clpPrice !== "number" || isNaN(clpPrice)) {
+    return "$0 CLP"
+  }
+
+  return `$${Math.round(clpPrice).toLocaleString("es-CL")} CLP`
+}
+
+/**
+ * Calcula el precio total de una lista de cartas en CLP
+ * @param cards Array de cartas
+ * @returns Precio total formateado en CLP
+ */
+const calculateTotalPrice = (cards: Card[]): string => {
+  const total = cards.reduce((sum, card) => {
+    return sum + (card.priceNumeric || 0)
+  }, 0)
+
+  return formatCLPPrice(total)
+}
 
 export default function CollectionDetailScreen() {
   const { id } = useLocalSearchParams()
@@ -74,98 +138,132 @@ export default function CollectionDetailScreen() {
   const [sortOption, setSortOption] = useState<SortOption>("name_asc")
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [loadingCards, setLoadingCards] = useState(true)
-  const [totalPrice, setTotalPrice] = useState("0")
+  const [totalPrice, setTotalPrice] = useState("$0 CLP")
+  const [removingCardId, setRemovingCardId] = useState<string | null>(null)
 
   // Transformar carta de API a formato UI
-  const transformCard = (apiCard: ApiCard): Card => ({
-    id: apiCard._id,
-    name: apiCard.name,
-    brand: `${apiCard.setInfo.name} (${apiCard.setInfo.series})`,
-    price: `${apiCard.price.toLocaleString("es-CL")}CLP`,
-    imageUri: apiCard.images.small || apiCard.images.large,
-    hp: apiCard.hp,
-    types: apiCard.types,
-    rarity: apiCard.rarity,
-    condition: apiCard.condition,
-  })
+  const transformCard = (apiCard: ApiCard): Card => {
+    // Asegurar que el precio sea un número válido
+    let usdPrice = 0
 
-  // Cargar datos de la collection y sus cartas
-  useEffect(() => {
-    const loadCollectionData = async () => {
-      try {
-        console.log(`🔍 COLLECTION_DETAIL: Cargando collection ${collectionId}`)
+    if (typeof apiCard.price === "number") {
+      usdPrice = apiCard.price
+    } else if (typeof apiCard.price === "string") {
+      usdPrice = Number.parseFloat(apiCard.price) || 0
+    }
 
-        // Obtener collection del store - SIN usar getCollectionById en dependencias
-        const { collections } = userStore.getState()
-        const collectionData = collections.find((c) => c._id === collectionId)
+    // Convertir a CLP
+    const clpPrice = convertUSDToCLP(usdPrice)
 
-        if (!collectionData) {
-          console.error("❌ COLLECTION_DETAIL: Collection no encontrada en store")
-          Alert.alert("Error", "Colección no encontrada")
-          router.back()
-          return
-        }
+    console.log(`💰 PRICE_CONVERSION: ${apiCard.name}`)
+    console.log(`   USD: $${usdPrice.toFixed(2)} -> CLP: $${clpPrice.toLocaleString("es-CL")}`)
 
-        console.log(`📊 COLLECTION_DETAIL: Collection encontrada:`, {
-          _id: collectionData._id,
-          name: collectionData.name,
-          card_count: collectionData.card_count,
-          cards_length: collectionData.cards?.length || 0,
-        })
+    return {
+      id: apiCard._id,
+      name: apiCard.name,
+      brand: `${apiCard.setInfo.name} (${apiCard.setInfo.series})`,
+      price: formatCLPPrice(clpPrice), // ✅ Precio formateado en CLP para mostrar
+      priceNumeric: clpPrice, // ✅ Precio numérico en CLP para cálculos
+      originalPriceUSD: usdPrice, // Precio original en USD para referencia
+      imageUri: apiCard.images.small || apiCard.images.large,
+      hp: apiCard.hp,
+      types: apiCard.types,
+      rarity: apiCard.rarity,
+      condition: apiCard.condition,
+    }
+  }
 
-        setCollection(collectionData)
+  // Extraer la función loadCollectionData fuera del efecto para poder reutilizarla
+  const loadCollectionData = async () => {
+    try {
+      console.log(`🔍 COLLECTION_DETAIL: Cargando collection ${collectionId}`)
+      setLoadingCards(true)
 
-        // Cargar las cartas de la collection
-        if (collectionData.cards && collectionData.cards.length > 0) {
-          setLoadingCards(true)
-          const cardPromises = collectionData.cards.map(async (cardItem) => {
-            try {
-              console.log(`🔍 COLLECTION_DETAIL: Cargando carta ${cardItem.product_id}`)
+      // Obtener collection del store
+      const { collections } = userStore.getState()
+      const collectionData = collections.find((c) => c._id === collectionId)
 
-              const response = await fetch(`http://localhost:3000/products/${cardItem.product_id}`)
-              if (!response.ok) {
-                console.warn(`⚠️ COLLECTION_DETAIL: Error cargando carta ${cardItem.product_id}`)
-                return null
-              }
+      if (!collectionData) {
+        console.error("❌ COLLECTION_DETAIL: Collection no encontrada en store")
+        Alert.alert("Error", "Colección no encontrada")
+        router.back()
+        return
+      }
 
-              const apiCard: ApiCard = await response.json()
-              return transformCard(apiCard)
-            } catch (err) {
-              console.warn(`⚠️ COLLECTION_DETAIL: Error en carta ${cardItem.product_id}:`, err)
+      console.log(`📊 COLLECTION_DETAIL: Collection encontrada:`, {
+        _id: collectionData._id,
+        name: collectionData.name,
+        card_count: collectionData.card_count,
+        cards_length: collectionData.cards?.length || 0,
+      })
+
+      setCollection(collectionData)
+
+      // Cargar las cartas de la collection
+      if (collectionData.cards && collectionData.cards.length > 0) {
+        const cardPromises = collectionData.cards.map(async (cardItem) => {
+          try {
+            console.log(`🔍 COLLECTION_DETAIL: Cargando carta ${cardItem.product_id}`)
+
+            const response = await fetch(`${API_BASE_URL}/products/${cardItem.product_id}`)
+            if (!response.ok) {
+              console.warn(`⚠️ COLLECTION_DETAIL: Error cargando carta ${cardItem.product_id}`)
               return null
             }
-          })
 
-          const loadedCards = await Promise.all(cardPromises)
-          const validCards = loadedCards.filter((card): card is Card => card !== null)
+            const apiCard: ApiCard = await response.json()
+            const transformedCard = transformCard(apiCard)
 
-          console.log(`✅ COLLECTION_DETAIL: Cartas cargadas: ${validCards.length}/${collectionData.cards.length}`)
+            console.log(`✅ COLLECTION_DETAIL: Carta transformada:`, {
+              name: transformedCard.name,
+              originalUSD: transformedCard.originalPriceUSD,
+              convertedCLP: transformedCard.priceNumeric,
+              displayPrice: transformedCard.price,
+            })
 
-          setCards(validCards)
+            return transformedCard
+          } catch (err) {
+            console.warn(`⚠️ COLLECTION_DETAIL: Error en carta ${cardItem.product_id}:`, err)
+            return null
+          }
+        })
 
-          // Calcular precio total
-          const total = validCards.reduce((sum, card) => {
-            const price = Number.parseFloat(card.price.replace("CLP", "").replace(/\./g, "").replace(",", "."))
-            return sum + price
-          }, 0)
-          setTotalPrice(`${total.toLocaleString("es-CL")}CLP`)
-        } else {
-          console.log("📝 COLLECTION_DETAIL: Collection sin cartas")
-          setCards([])
-          setTotalPrice("0CLP")
-        }
-      } catch (err) {
-        console.error("❌ COLLECTION_DETAIL: Error cargando collection:", err)
-        Alert.alert("Error", "No se pudo cargar la colección")
-      } finally {
-        setLoadingCards(false)
+        const loadedCards = await Promise.all(cardPromises)
+        const validCards = loadedCards.filter((card): card is Card => card !== null)
+
+        console.log(`✅ COLLECTION_DETAIL: Cartas cargadas: ${validCards.length}/${collectionData.cards.length}`)
+
+        setCards(validCards)
+
+        // Calcular precio total usando la función helper
+        const totalPriceFormatted = calculateTotalPrice(validCards)
+        console.log(`💰 COLLECTION_DETAIL: Precio total calculado: ${totalPriceFormatted}`)
+        setTotalPrice(totalPriceFormatted)
+      } else {
+        console.log("📝 COLLECTION_DETAIL: Collection sin cartas")
+        setCards([])
+        setTotalPrice("$0 CLP")
       }
+    } catch (err) {
+      console.error("❌ COLLECTION_DETAIL: Error cargando collection:", err)
+      Alert.alert("Error", "No se pudo cargar la colección")
+    } finally {
+      setLoadingCards(false)
     }
+  }
 
-    if (collectionId) {
-      loadCollectionData()
-    }
-  }, [collectionId])
+  // Usar useFocusEffect para recargar los datos cada vez que la pantalla obtiene el foco
+  useFocusEffect(
+    useCallback(() => {
+      console.log("🔄 COLLECTION_DETAIL: Pantalla enfocada, recargando datos...")
+      if (collectionId) {
+        loadCollectionData()
+      }
+      return () => {
+        // Cleanup si es necesario
+      }
+    }, [collectionId]),
+  )
 
   // Filter and sort cards when search query or sort option changes
   useEffect(() => {
@@ -199,70 +297,144 @@ export default function CollectionDetailScreen() {
       case "name_desc":
         return sorted.sort((a, b) => b.name.localeCompare(a.name))
       case "price_asc":
-        return sorted.sort((a, b) => {
-          const priceA = Number.parseFloat(a.price.replace("CLP", "").replace(/\./g, "").replace(",", "."))
-          const priceB = Number.parseFloat(b.price.replace("CLP", "").replace(/\./g, "").replace(",", "."))
-          return priceA - priceB
-        })
+        return sorted.sort((a, b) => (a.priceNumeric || 0) - (b.priceNumeric || 0))
       case "price_desc":
-        return sorted.sort((a, b) => {
-          const priceA = Number.parseFloat(a.price.replace("CLP", "").replace(/\./g, "").replace(",", "."))
-          const priceB = Number.parseFloat(b.price.replace("CLP", "").replace(/\./g, "").replace(",", "."))
-          return priceB - priceA
-        })
+        return sorted.sort((a, b) => (b.priceNumeric || 0) - (a.priceNumeric || 0))
       default:
         return sorted
     }
   }
 
-  // Remove card from collection
+  // 🔧 FUNCIÓN SIMPLIFICADA: Remove card from collection con logging extensivo
   const removeCard = async (cardId: string) => {
-    if (!collection?._id) return
+    if (!collection?._id) {
+      console.error("❌ REMOVE_CARD: No hay collection ID")
+      Alert.alert("Error", "No se pudo identificar la colección")
+      return
+    }
 
+    console.log(`🚀 REMOVE_CARD: Iniciando proceso de eliminación`)
+    console.log(`   Collection ID: ${collection._id}`)
+    console.log(`   Collection Name: ${collection.name}`)
+    console.log(`   Card ID: ${cardId}`)
+    console.log(`   Cards actuales en UI: ${cards.length}`)
+    console.log(`   Cards en collection store: ${collection.cards?.length || 0}`)
+
+    // Buscar la carta en el estado local
+    const cardToRemove = cards.find((c) => c.id === cardId)
+    if (cardToRemove) {
+      console.log(`🎯 REMOVE_CARD: Carta encontrada en UI:`, {
+        name: cardToRemove.name,
+        id: cardToRemove.id,
+        price: cardToRemove.price,
+      })
+    } else {
+      console.warn(`⚠️ REMOVE_CARD: Carta ${cardId} no encontrada en estado local`)
+    }
+
+    console.log(`📱 REMOVE_CARD: Mostrando Alert de confirmación...`)
+
+    // 🔧 VERSIÓN SIMPLIFICADA PARA TESTING - SIN ALERT
+    // Comentamos el Alert temporalmente para hacer testing directo
+    /*
     Alert.alert("Remover Carta", "¿Estás seguro de que quieres remover esta carta de la colección?", [
       {
         text: "Cancelar",
         style: "cancel",
+        onPress: () => {
+          console.log(`❌ REMOVE_CARD: Operación cancelada por el usuario`)
+        },
       },
       {
         text: "Remover",
         style: "destructive",
         onPress: async () => {
-          try {
-            console.log(`🗑️ COLLECTION_DETAIL: Removiendo carta ${cardId} de collection ${collection._id}`)
-
-            await removeCardFromCollection(collection._id!, cardId)
-
-            // Actualizar estado local
-            const updatedCards = cards.filter((card) => card.id !== cardId)
-            setCards(updatedCards)
-
-            // Recalcular precio total
-            const total = updatedCards.reduce((sum, card) => {
-              const price = Number.parseFloat(card.price.replace("CLP", "").replace(/\./g, "").replace(",", "."))
-              return sum + price
-            }, 0)
-            setTotalPrice(`${total.toLocaleString("es-CL")}CLP`)
-
-            // Actualizar collection
-            setCollection((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    card_count: updatedCards.length,
-                    cards: prev.cards.filter((item) => item.product_id !== cardId),
-                  }
-                : null,
-            )
-
-            console.log(`✅ COLLECTION_DETAIL: Carta removida exitosamente`)
-          } catch (err) {
-            console.error("❌ COLLECTION_DETAIL: Error removiendo carta:", err)
-            Alert.alert("Error", "No se pudo remover la carta")
-          }
+          await executeRemoval(cardId)
         },
       },
     ])
+    */
+
+    // 🔧 EJECUTAR DIRECTAMENTE PARA TESTING
+    console.log(`🔥 REMOVE_CARD: Ejecutando eliminación directamente (sin Alert)`)
+    await executeRemoval(cardId)
+  }
+
+  // 🔧 FUNCIÓN SEPARADA PARA LA LÓGICA DE ELIMINACIÓN
+  const executeRemoval = async (cardId: string) => {
+    try {
+      setRemovingCardId(cardId)
+      console.log(`🗑️ EXECUTE_REMOVAL: Usuario confirmó eliminación`)
+      console.log(`🔄 EXECUTE_REMOVAL: Estableciendo loading state para card: ${cardId}`)
+
+      // 🔧 LLAMAR AL STORE ACTUALIZADO
+      console.log(`📞 EXECUTE_REMOVAL: Llamando al store para eliminar carta...`)
+      console.log(`   Collection ID: ${collection?._id}`)
+      console.log(`   Card ID: ${cardId}`)
+
+      if (!collection?._id) {
+        throw new Error("Collection ID no disponible")
+      }
+
+      await removeCardFromCollection(collection._id, cardId)
+
+      console.log(`✅ EXECUTE_REMOVAL: Store completó la eliminación`)
+
+      // 🔧 ACTUALIZAR ESTADO LOCAL INMEDIATAMENTE
+      console.log(`🔄 EXECUTE_REMOVAL: Actualizando estado local de UI...`)
+
+      const updatedCards = cards.filter((card) => card.id !== cardId)
+      console.log(`   Cards antes: ${cards.length}`)
+      console.log(`   Cards después: ${updatedCards.length}`)
+
+      setCards(updatedCards)
+
+      // Recalcular precio total
+      const newTotalPrice = calculateTotalPrice(updatedCards)
+      setTotalPrice(newTotalPrice)
+      console.log(`   Nuevo precio total: ${newTotalPrice}`)
+
+      // Actualizar collection local
+      setCollection((prev) => {
+        if (!prev) return null
+
+        const updatedCollection = {
+          ...prev,
+          card_count: updatedCards.length,
+          cards: prev.cards.filter((item) => item.product_id !== cardId),
+        }
+
+        console.log(`   Collection actualizada:`, {
+          card_count: updatedCollection.card_count,
+          cards_length: updatedCollection.cards.length,
+        })
+
+        return updatedCollection
+      })
+
+      console.log(`🎉 EXECUTE_REMOVAL: Proceso completado exitosamente`)
+      Alert.alert("Éxito", "Carta removida de la colección")
+    } catch (error) {
+      // Manejo de errores
+      console.error("❌ EXECUTE_REMOVAL: Error en el proceso:", error)
+
+      let errorMessage = "Error desconocido"
+      if (error instanceof Error) {
+        errorMessage = error.message
+        console.error(`❌ EXECUTE_REMOVAL: Error message: ${errorMessage}`)
+        console.error(`❌ EXECUTE_REMOVAL: Error stack:`, error.stack)
+      } else if (typeof error === "string") {
+        errorMessage = error
+        console.error(`❌ EXECUTE_REMOVAL: String error: ${errorMessage}`)
+      } else {
+        console.error(`❌ EXECUTE_REMOVAL: Unknown error type:`, typeof error, error)
+      }
+
+      Alert.alert("Error", `No se pudo remover la carta: ${errorMessage}`)
+    } finally {
+      console.log(`🔄 EXECUTE_REMOVAL: Limpiando loading state`)
+      setRemovingCardId(null)
+    }
   }
 
   // Toggle filter modal
@@ -337,6 +509,9 @@ export default function CollectionDetailScreen() {
           {collection.card_count || 0} carta{(collection.card_count || 0) !== 1 ? "s" : ""}
         </Text>
         <Text style={styles.totalPriceText}>Precio Total: {totalPrice}</Text>
+        <Text style={styles.exchangeRateText}>
+          Tasa de cambio: 1 USD = ${EXCHANGE_RATE_USD_TO_CLP.toLocaleString("es-CL")} CLP
+        </Text>
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -349,9 +524,22 @@ export default function CollectionDetailScreen() {
                 style={styles.cardContainer}
                 onPress={() => navigateToCardDetail(card.id)}
               >
-                <TouchableOpacity style={styles.removeButton} onPress={() => removeCard(card.id)}>
-                  <Feather name="x" size={16} color="white" />
+                {/* 🔧 BOTÓN DE ELIMINAR con mejor feedback visual */}
+                <TouchableOpacity
+                  style={[styles.removeButton, removingCardId === card.id && styles.removeButtonLoading]}
+                  onPress={() => {
+                    console.log(`🖱️ REMOVE_BUTTON: Usuario presionó eliminar para carta: ${card.id} (${card.name})`)
+                    removeCard(card.id)
+                  }}
+                  disabled={removingCardId === card.id}
+                >
+                  {removingCardId === card.id ? (
+                    <ActivityIndicator size={12} color="white" />
+                  ) : (
+                    <Feather name="x" size={16} color="white" />
+                  )}
                 </TouchableOpacity>
+
                 <Image source={{ uri: card.imageUri }} style={styles.cardImage} />
                 <View style={styles.cardInfo}>
                   <Text style={styles.cardName} numberOfLines={1}>
@@ -369,7 +557,10 @@ export default function CollectionDetailScreen() {
                       </Text>
                     ))}
                   </View>
+                  {/* ✅ PRECIO EN CLP */}
                   <Text style={styles.cardPrice}>{card.price}</Text>
+                  {/* Precio original en USD como referencia */}
+                  <Text style={styles.cardPriceUSD}>{`($${card.originalPriceUSD.toFixed(2)} USD)`}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -515,7 +706,7 @@ const styles = StyleSheet.create({
   },
   infoContainer: {
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 12,
     backgroundColor: "#fff",
     marginHorizontal: 15,
     marginBottom: 10,
@@ -532,6 +723,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     color: "#333",
+    marginBottom: 4,
+  },
+  exchangeRateText: {
+    fontSize: 12,
+    color: "#888",
+    fontStyle: "italic",
   },
   scrollView: {
     flex: 1,
@@ -564,6 +761,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#ff6b6b",
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  removeButtonLoading: {
+    backgroundColor: "#ff9999",
   },
   cardImage: {
     width: "100%",
@@ -613,6 +821,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "bold",
     color: "#6c08dd",
+    marginBottom: 2,
+  },
+  cardPriceUSD: {
+    fontSize: 10,
+    color: "#999",
+    fontStyle: "italic",
   },
   emptyContainer: {
     alignItems: "center",
