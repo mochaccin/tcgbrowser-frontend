@@ -4,16 +4,17 @@ import { router, useLocalSearchParams } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { useState } from "react"
 import {
-    Dimensions,
-    Image,
-    Modal,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Dimensions,
+  Image,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native"
+import { LineChart } from "react-native-chart-kit"
 import NavigationDrawer from "../../components/NavigationDrawer"
 
 const { width } = Dimensions.get("window")
@@ -38,6 +39,19 @@ const CARD_DETAILS = {
     avgSalesPrice: "825",
     totalSales: 89,
     avgDailySales: 12,
+    priceHistory: {
+      labels: ["Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic", "Ene", "Feb"],
+      datasets: [
+        {
+          data: [650, 680, 720, 750, 790, 810, 780, 820, 850, 830, 800, 780],
+          color: (opacity = 1) => `rgba(108, 8, 221, ${opacity})`,
+          strokeWidth: 2,
+        },
+      ],
+    },
+    volatility: 0.75, // 0-1 scale
+    priceChange: -2.5, // percentage
+    priceChangeColor: "#e74c3c", // red for negative, green for positive
   },
   card2: {
     id: "card2",
@@ -57,6 +71,19 @@ const CARD_DETAILS = {
     avgSalesPrice: "1175",
     totalSales: 156,
     avgDailySales: 18,
+    priceHistory: {
+      labels: ["Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic", "Ene", "Feb"],
+      datasets: [
+        {
+          data: [950, 1000, 1050, 1100, 1250, 1300, 1350, 1400, 1350, 1300, 1250, 1200],
+          color: (opacity = 1) => `rgba(108, 8, 221, ${opacity})`,
+          strokeWidth: 2,
+        },
+      ],
+    },
+    volatility: 0.5, // 0-1 scale
+    priceChange: 3.2, // percentage
+    priceChangeColor: "#2ecc71", // green for positive
   },
   card3: {
     id: "card3",
@@ -76,6 +103,19 @@ const CARD_DETAILS = {
     avgSalesPrice: "43500",
     totalSales: 23,
     avgDailySales: 3,
+    priceHistory: {
+      labels: ["Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic", "Ene", "Feb"],
+      datasets: [
+        {
+          data: [38000, 40000, 42000, 45000, 50000, 55000, 60000, 65000, 58000, 52000, 48000, 45000],
+          color: (opacity = 1) => `rgba(108, 8, 221, ${opacity})`,
+          strokeWidth: 2,
+        },
+      ],
+    },
+    volatility: 0.85, // 0-1 scale
+    priceChange: -5.8, // percentage
+    priceChangeColor: "#e74c3c", // red for negative
   },
 }
 
@@ -119,12 +159,30 @@ const SAMPLE_LISTINGS = [
   },
 ]
 
+// Chart configuration
+const chartConfig = {
+  backgroundGradientFrom: "#ffffff",
+  backgroundGradientTo: "#ffffff",
+  decimalPlaces: 0,
+  color: (opacity = 1) => `rgba(108, 8, 221, ${opacity})`,
+  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+  style: {
+    borderRadius: 16,
+  },
+  propsForDots: {
+    r: "4",
+    strokeWidth: "2",
+    stroke: "#6c08dd",
+  },
+}
+
 export default function CardDetailScreen() {
   const params = useLocalSearchParams()
   const cardId = (params.cardId as string) || "card1"
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [showSortModal, setShowSortModal] = useState(false)
   const [selectedSort, setSelectedSort] = useState("price")
+  const [timeRange, setTimeRange] = useState("3m") // 1m, 3m, 6m, 1y
 
   // Get card details (in a real app, this would be an API call)
   const cardDetails = CARD_DETAILS[cardId as keyof typeof CARD_DETAILS] || CARD_DETAILS.card1
@@ -135,6 +193,27 @@ export default function CardDetailScreen() {
     { id: "seller", label: "Vendedor" },
     { id: "newest", label: "Más recientes" },
   ]
+
+  const timeRangeOptions = [
+    { id: "1m", label: "1 mes" },
+    { id: "3m", label: "3 meses" },
+    { id: "6m", label: "6 meses" },
+    { id: "1y", label: "1 año" },
+  ]
+
+  // Calculate volatility bars
+  const getVolatilityBars = () => {
+    const volatility = cardDetails.volatility || 0.5
+    const activeIndex = Math.floor(volatility * 5)
+    return Array(5)
+      .fill(0)
+      .map((_, index) => index < activeIndex)
+  }
+
+  // Format price with commas
+  const formatPrice = (price: string) => {
+    return price.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -194,49 +273,89 @@ export default function CardDetailScreen() {
         <View style={styles.priceSection}>
           <View style={styles.priceSectionHeader}>
             <Text style={styles.sectionTitle}>Puntos de precio</Text>
-            <TouchableOpacity>
-              <Text style={styles.clearDataText}>Clear nuevo</Text>
+            <TouchableOpacity style={styles.refreshButton}>
+              <Feather name="refresh-cw" size={16} color="#6c08dd" />
+              <Text style={styles.refreshText}>Actualizar</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.priceGrid}>
-            <View style={styles.priceCard}>
+          <View style={styles.priceStatsContainer}>
+            <View style={styles.priceMainStat}>
               <Text style={styles.priceLabel}>Precio de mercado</Text>
-              <Text style={styles.priceValue}>$ {cardDetails.marketPrice} CLP</Text>
-              <Text style={styles.priceSubtext}>Venta más reciente</Text>
-              <Text style={styles.priceChange}>$ {cardDetails.recentPrice} CLP</Text>
-            </View>
-
-            <View style={styles.priceCard}>
-              <Text style={styles.priceLabel}>Volatilidad Med</Text>
-              <View style={styles.volatilityIndicator}>
-                <View style={styles.volatilityBar} />
-                <View style={styles.volatilityBar} />
-                <View style={styles.volatilityBar} />
-                <View style={[styles.volatilityBar, styles.volatilityBarActive]} />
-                <View style={styles.volatilityBar} />
+              <Text style={styles.priceValue}>$ {formatPrice(cardDetails.marketPrice)} CLP</Text>
+              <View style={styles.priceChangeContainer}>
+                <Feather
+                  name={Number(cardDetails.priceChange) >= 0 ? "arrow-up" : "arrow-down"}
+                  size={14}
+                  color={cardDetails.priceChangeColor}
+                />
+                <Text style={[styles.priceChangeText, { color: cardDetails.priceChangeColor }]}>
+                  {Math.abs(Number(cardDetails.priceChange))}%
+                </Text>
               </View>
             </View>
 
-            <View style={styles.priceCard}>
-              <Text style={styles.priceLabel}>Mediana cotizada:</Text>
-              <Text style={styles.priceValue}>$ {cardDetails.highPrice} CLP</Text>
-              <Text style={styles.priceLabel}>Cantidad total:</Text>
-              <Text style={styles.priceSubtext}>{cardDetails.totalListings}</Text>
-            </View>
+            <View style={styles.priceStatsGrid}>
+              <View style={styles.priceStat}>
+                <Text style={styles.priceStatLabel}>Venta reciente</Text>
+                <Text style={styles.priceStatValue}>$ {formatPrice(cardDetails.recentPrice)}</Text>
+              </View>
 
-            <View style={styles.priceCard}>
-              <Text style={styles.priceLabel}>Vendedores actuales:</Text>
-              <Text style={styles.priceValue}>{Math.floor(Number(cardDetails.totalListings) * 0.6)}</Text>
+              <View style={styles.priceStat}>
+                <Text style={styles.priceStatLabel}>Precio más alto</Text>
+                <Text style={styles.priceStatValue}>$ {formatPrice(cardDetails.highPrice)}</Text>
+              </View>
+
+              <View style={styles.priceStat}>
+                <Text style={styles.priceStatLabel}>Precio más bajo</Text>
+                <Text style={styles.priceStatValue}>$ {formatPrice(cardDetails.lowPrice)}</Text>
+              </View>
+
+              <View style={styles.priceStat}>
+                <Text style={styles.priceStatLabel}>Volatilidad</Text>
+                <View style={styles.volatilityContainer}>
+                  {getVolatilityBars().map((isActive, index) => (
+                    <View key={index} style={[styles.volatilityBar, isActive && styles.volatilityBarActive]} />
+                  ))}
+                </View>
+              </View>
             </View>
           </View>
 
-          {/* Price Chart Placeholder */}
+          {/* Price Chart */}
           <View style={styles.chartContainer}>
-            <View style={styles.chartPlaceholder}>
-              <Text style={styles.chartText}>Gráfico de precios (3 meses)</Text>
-              <View style={styles.chartLine} />
+            <View style={styles.chartHeader}>
+              <Text style={styles.chartTitle}>Historial de precios</Text>
+              <View style={styles.timeRangeSelector}>
+                {timeRangeOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.id}
+                    style={[styles.timeRangeOption, timeRange === option.id && styles.timeRangeOptionActive]}
+                    onPress={() => setTimeRange(option.id)}
+                  >
+                    <Text style={[styles.timeRangeText, timeRange === option.id && styles.timeRangeTextActive]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
+
+            <LineChart
+              data={cardDetails.priceHistory}
+              width={width - 32}
+              height={220}
+              chartConfig={chartConfig}
+              bezier
+              style={styles.chart}
+              withDots={false}
+              withInnerLines={false}
+              withOuterLines={true}
+              withVerticalLabels={true}
+              withHorizontalLabels={true}
+              fromZero={false}
+              yAxisSuffix=" CLP"
+            />
           </View>
         </View>
 
@@ -245,20 +364,35 @@ export default function CardDetailScreen() {
           <Text style={styles.sectionTitle}>Resumen de 3 meses</Text>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Precio de venta alto:</Text>
-              <Text style={styles.summaryValue}>$ {cardDetails.highPrice}</Text>
+              <View style={styles.summaryIconContainer}>
+                <Feather name="trending-up" size={20} color="#6c08dd" />
+              </View>
+              <Text style={styles.summaryValue}>$ {formatPrice(cardDetails.highPrice)}</Text>
+              <Text style={styles.summaryLabel}>Precio de venta alto</Text>
             </View>
+
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Total vendidas:</Text>
+              <View style={styles.summaryIconContainer}>
+                <Feather name="shopping-bag" size={20} color="#6c08dd" />
+              </View>
               <Text style={styles.summaryValue}>{cardDetails.totalSales}</Text>
+              <Text style={styles.summaryLabel}>Total vendidas</Text>
             </View>
+
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Precio de venta alto:</Text>
-              <Text style={styles.summaryValue}>$ {cardDetails.avgSalesPrice}</Text>
+              <View style={styles.summaryIconContainer}>
+                <Feather name="dollar-sign" size={20} color="#6c08dd" />
+              </View>
+              <Text style={styles.summaryValue}>$ {formatPrice(cardDetails.avgSalesPrice)}</Text>
+              <Text style={styles.summaryLabel}>Precio promedio</Text>
             </View>
+
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Promedio de ventas diarias:</Text>
+              <View style={styles.summaryIconContainer}>
+                <Feather name="calendar" size={20} color="#6c08dd" />
+              </View>
               <Text style={styles.summaryValue}>{cardDetails.avgDailySales}</Text>
+              <Text style={styles.summaryLabel}>Ventas diarias</Text>
             </View>
           </View>
         </View>
@@ -282,19 +416,32 @@ export default function CardDetailScreen() {
               <Image source={{ uri: listing.imageUri }} style={styles.listingImage} />
               <View style={styles.listingDetails}>
                 <View style={styles.listingHeader}>
-                  <Text style={styles.listingPrice}>$ {listing.price} CLP</Text>
-                  <Text style={styles.listingCondition}>{listing.condition}</Text>
+                  <Text style={styles.listingPrice}>$ {formatPrice(listing.price)} CLP</Text>
+                  <View style={styles.conditionBadge}>
+                    <Text style={styles.conditionText}>{listing.condition}</Text>
+                  </View>
                 </View>
                 <View style={styles.sellerInfo}>
                   <Feather name="user" size={16} color="#666" />
                   <Text style={styles.sellerName}>{listing.sellerName}</Text>
                 </View>
                 <View style={styles.ratingInfo}>
-                  <Feather name="star" size={14} color="#FFD700" />
+                  <View style={styles.starsContainer}>
+                    {Array(5)
+                      .fill(0)
+                      .map((_, i) => (
+                        <Feather
+                          key={i}
+                          name={i < Math.floor(listing.rating) ? "star" : i < listing.rating ? "star" : "star"}
+                          size={14}
+                          color={i < listing.rating ? "#FFD700" : "#e0e0e0"}
+                        />
+                      ))}
+                  </View>
                   <Text style={styles.ratingText}>{listing.rating}</Text>
-                  <Text style={styles.transactionsText}>{listing.transactions} transacciones</Text>
+                  <Text style={styles.transactionsText}>{listing.transactions.toLocaleString()} transacciones</Text>
                 </View>
-                <TouchableOpacity style={styles.sellerProfileButton}>
+                <TouchableOpacity style={styles.sellerProfileButton} onPress={() => router.push("/profile")}>
                   <Text style={styles.sellerProfileButtonText}>Perfil Vendedor</Text>
                 </TouchableOpacity>
               </View>
@@ -302,44 +449,8 @@ export default function CardDetailScreen() {
           ))}
         </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <View style={styles.socialIcons}>
-            <TouchableOpacity style={styles.footerSocialIcon}>
-              <Feather name="facebook" size={20} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.footerSocialIcon}>
-              <Feather name="instagram" size={20} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.footerSocialIcon}>
-              <Feather name="twitter" size={20} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.footerSocialIcon}>
-              <Feather name="help-circle" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.footerText}>
-            Descubre el mundo de Pokemon TCG con las mejores cartas, estrategias y colecciones. Únete a millones de
-            entrenadores en todo el mundo.
-          </Text>
-
-          <Text style={styles.footerText}>© 2025 Pokemon TCG Browser. Todos los derechos reservados.</Text>
-
-          <View style={styles.footerLinks}>
-            <TouchableOpacity>
-              <Text style={styles.footerLink}>Política de Privacidad</Text>
-            </TouchableOpacity>
-            <Text style={styles.footerLinkDivider}>|</Text>
-            <TouchableOpacity>
-              <Text style={styles.footerLink}>Términos de Servicio</Text>
-            </TouchableOpacity>
-            <Text style={styles.footerLinkDivider}>|</Text>
-            <TouchableOpacity>
-              <Text style={styles.footerLink}>Accesibilidad</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        
+       
       </ScrollView>
 
       {/* Sort Modal */}
@@ -477,49 +588,73 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  clearDataText: {
+  refreshButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  refreshText: {
     fontSize: 14,
     color: "#6c08dd",
     fontWeight: "500",
   },
-  priceGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
+  priceStatsContainer: {
     marginBottom: 20,
   },
-  priceCard: {
+  priceMainStat: {
     backgroundColor: "#f8f9fa",
-    borderRadius: 8,
-    padding: 12,
-    width: (width - 56) / 2,
-    minHeight: 80,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: "center",
   },
   priceLabel: {
-    fontSize: 12,
+    fontSize: 14,
     color: "#666",
     marginBottom: 4,
   },
   priceValue: {
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: "bold",
     color: "#333",
     marginBottom: 4,
   },
-  priceSubtext: {
-    fontSize: 11,
-    color: "#999",
-    marginBottom: 2,
+  priceChangeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
-  priceChange: {
+  priceChangeText: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#6c08dd",
   },
-  volatilityIndicator: {
+  priceStatsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  priceStat: {
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+    padding: 12,
+    width: (width - 56) / 2,
+    alignItems: "center",
+  },
+  priceStatLabel: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 4,
+  },
+  priceStatValue: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  volatilityContainer: {
     flexDirection: "row",
     gap: 4,
-    marginTop: 8,
+    marginTop: 4,
   },
   volatilityBar: {
     width: 8,
@@ -531,26 +666,47 @@ const styles = StyleSheet.create({
     backgroundColor: "#6c08dd",
   },
   chartContainer: {
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+    padding: 16,
     marginTop: 16,
   },
-  chartPlaceholder: {
-    height: 120,
-    backgroundColor: "#f8f9fa",
-    borderRadius: 8,
-    justifyContent: "center",
+  chartHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    position: "relative",
+    marginBottom: 16,
   },
-  chartText: {
-    fontSize: 14,
-    color: "#666",
-    marginBottom: 10,
+  chartTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
   },
-  chartLine: {
-    width: "80%",
-    height: 2,
+  timeRangeSelector: {
+    flexDirection: "row",
+    backgroundColor: "#e0e0e0",
+    borderRadius: 20,
+    padding: 2,
+  },
+  timeRangeOption: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 18,
+  },
+  timeRangeOptionActive: {
     backgroundColor: "#6c08dd",
-    borderRadius: 1,
+  },
+  timeRangeText: {
+    fontSize: 12,
+    color: "#666",
+  },
+  timeRangeTextActive: {
+    color: "#fff",
+    fontWeight: "500",
+  },
+  chart: {
+    marginVertical: 8,
+    borderRadius: 12,
   },
   summarySection: {
     backgroundColor: "#fff",
@@ -561,23 +717,35 @@ const styles = StyleSheet.create({
   summaryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
+    justifyContent: "space-between",
     gap: 12,
   },
   summaryCard: {
     backgroundColor: "#f8f9fa",
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     width: (width - 56) / 2,
+    alignItems: "center",
+  },
+  summaryIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f0e6ff",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  summaryValue: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 4,
   },
   summaryLabel: {
     fontSize: 12,
     color: "#666",
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
+    textAlign: "center",
   },
   listingsSection: {
     backgroundColor: "#fff",
@@ -616,7 +784,7 @@ const styles = StyleSheet.create({
   listingCard: {
     flexDirection: "row",
     backgroundColor: "#f8f9fa",
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 12,
     marginBottom: 12,
     gap: 12,
@@ -640,13 +808,16 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#333",
   },
-  listingCondition: {
-    fontSize: 12,
-    color: "#666",
+  conditionBadge: {
     backgroundColor: "#e8f5e8",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
+  },
+  conditionText: {
+    fontSize: 12,
+    color: "#2ecc71",
+    fontWeight: "500",
   },
   sellerInfo: {
     flexDirection: "row",
@@ -663,10 +834,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
   },
+  starsContainer: {
+    flexDirection: "row",
+    gap: 2,
+  },
   ratingText: {
     fontSize: 12,
     color: "#333",
     fontWeight: "500",
+    marginLeft: 4,
   },
   transactionsText: {
     fontSize: 12,
@@ -678,6 +854,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 6,
     alignSelf: "flex-start",
+    marginTop: 4,
   },
   sellerProfileButtonText: {
     color: "#fff",
