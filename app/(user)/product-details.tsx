@@ -4,8 +4,11 @@ import { router, useLocalSearchParams } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { useEffect, useState } from "react"
 import {
+  ActivityIndicator,
+  Alert,
   Dimensions,
   Image,
+  Linking,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -13,9 +16,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  ActivityIndicator,
-  Linking,
-  Alert,
 } from "react-native"
 import { LineChart } from "react-native-chart-kit"
 import NavigationDrawer from "../../components/NavigationDrawer"
@@ -444,10 +444,10 @@ export default function CardDetailScreen() {
   ]
 
   const timeRangeOptions = [
-    { id: "1m", label: "1 mes" },
-    { id: "3m", label: "3 meses" },
-    { id: "6m", label: "6 meses" },
-    { id: "1y", label: "1 año" },
+    { id: "1m", label: "1m" },
+    { id: "3m", label: "3m" },
+    { id: "6m", label: "6m" },
+    { id: "1y", label: "1a" },
   ]
 
   const getVolatilityBars = () => {
@@ -627,8 +627,8 @@ export default function CardDetailScreen() {
 
             <LineChart
               data={getPriceHistoryData()}
-              width={width - 32}
-              height={220}
+              width={width - 48}
+              height={200}
               chartConfig={chartConfig}
               bezier
               style={styles.chart}
@@ -638,7 +638,7 @@ export default function CardDetailScreen() {
               withVerticalLabels={true}
               withHorizontalLabels={true}
               fromZero={false}
-              yAxisSuffix=" CLP"
+              yAxisSuffix=""
             />
           </View>
         </View>
@@ -935,7 +935,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
     textAlign: "center",
     marginHorizontal: 10,
@@ -949,10 +949,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "bold",
     color: "#333",
-    lineHeight: 28,
+    lineHeight: 26,
   },
   cardImageContainer: {
     backgroundColor: "#fff",
@@ -962,10 +962,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   cardImage: {
-    width: Math.min(width * 0.6, 280),
-    height: Math.min(width * 0.84, 392),
-    maxWidth: 280,
-    maxHeight: 392,
+    width: Math.min(width * 0.55, 240),
+    height: Math.min(width * 0.77, 336),
+    maxWidth: 240,
+    maxHeight: 336,
     borderRadius: 12,
     shadowColor: "#000",
     shadowOffset: {
@@ -1049,7 +1049,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   priceValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "bold",
     color: "#333",
     marginBottom: 4,
@@ -1067,33 +1067,36 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    gap: 12,
+    gap: 8,
   },
   priceStat: {
     backgroundColor: "#f8f9fa",
     borderRadius: 12,
     padding: 12,
-    width: (width - 56) / 2,
+    width: (width - 64) / 2,
     alignItems: "center",
+    minHeight: 80,
   },
   priceStatLabel: {
     fontSize: 12,
     color: "#666",
     marginBottom: 4,
+    textAlign: "center",
   },
   priceStatValue: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
     color: "#333",
+    textAlign: "center",
   },
   volatilityContainer: {
     flexDirection: "row",
-    gap: 4,
+    gap: 3,
     marginTop: 4,
   },
   volatilityBar: {
-    width: 8,
-    height: 20,
+    width: 6,
+    height: 16,
     backgroundColor: "#e0e0e0",
     borderRadius: 2,
   },
@@ -1103,14 +1106,16 @@ const styles = StyleSheet.create({
   chartContainer: {
     backgroundColor: "#f8f9fa",
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     marginTop: 16,
   },
   chartHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 12,
+    flexWrap: "wrap",
+    gap: 8,
   },
   chartTitle: {
     fontSize: 16,
@@ -1120,20 +1125,22 @@ const styles = StyleSheet.create({
   timeRangeSelector: {
     flexDirection: "row",
     backgroundColor: "#e0e0e0",
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 2,
   },
   timeRangeOption: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 18,
+    borderRadius: 14,
+    minWidth: 32,
   },
   timeRangeOptionActive: {
     backgroundColor: "#6c08dd",
   },
   timeRangeText: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#666",
+    textAlign: "center",
   },
   timeRangeTextActive: {
     color: "#fff",
@@ -1153,34 +1160,37 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    gap: 12,
+    gap: 8,
   },
   summaryCard: {
     backgroundColor: "#f8f9fa",
     borderRadius: 12,
-    padding: 16,
-    width: (width - 56) / 2,
+    padding: 12,
+    width: (width - 64) / 2,
     alignItems: "center",
+    minHeight: 100,
   },
   summaryIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: "#f0e6ff",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
   },
   summaryValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
     color: "#333",
     marginBottom: 4,
+    textAlign: "center",
   },
   summaryLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#666",
     textAlign: "center",
+    lineHeight: 14,
   },
   // 🔧 NUEVOS ESTILOS: Sección de vendedores con estética de listados
   sellersSection: {
@@ -1194,6 +1204,30 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  sortContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sortLabel: {
+    fontSize: 14,
+    color: "#666",
+  },
+  sortButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "#f8f9fa",
+    borderRadius: 6,
+  },
+  sortButtonText: {
+    fontSize: 14,
+    color: "#333",
   },
   sellersLoadingContainer: {
     flexDirection: "row",
@@ -1228,8 +1262,8 @@ const styles = StyleSheet.create({
     borderColor: "#e0e0e0",
   },
   sellerImage: {
-    width: 60,
-    height: 80,
+    width: 50,
+    height: 70,
     borderRadius: 8,
     backgroundColor: "#f0f0f0",
   },
@@ -1243,18 +1277,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   sellerPrice: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
     color: "#2ecc71",
   },
   sellerStatusBadge: {
     backgroundColor: "#e8f5e8",
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   sellerStatusText: {
-    fontSize: 12,
+    fontSize: 10,
     color: "#2ecc71",
     fontWeight: "500",
   },
@@ -1267,30 +1301,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#333",
     fontWeight: "500",
+    flex: 1,
   },
   sellerRatingInfo: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    flexWrap: "wrap",
   },
   sellerStarsContainer: {
     flexDirection: "row",
-    gap: 2,
+    gap: 1,
   },
   sellerRatingText: {
     fontSize: 12,
     color: "#333",
     fontWeight: "500",
-    marginLeft: 4,
   },
   sellerLocationText: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#666",
+    flex: 1,
   },
   sellerContactButton: {
     backgroundColor: "#6c08dd",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 6,
     alignSelf: "flex-start",
     marginTop: 4,
@@ -1323,6 +1359,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     maxHeight: "70%",
     marginTop: "auto",
+    width: "100%",
   },
   contactModalHeader: {
     flexDirection: "row",
@@ -1402,8 +1439,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 12,
     overflow: "hidden",
-    width: "80%",
-    maxHeight: "60%",
+    width: width * 0.8,
+    maxHeight: height * 0.6,
   },
   sortModalHeader: {
     flexDirection: "row",
