@@ -21,7 +21,7 @@ import NavigationDrawer from "../../components/NavigationDrawer"
 const { width, height } = Dimensions.get("window")
 
 // Tasa de cambio estática USD a CLP
-const USD_TO_CLP_RATE = 950 // Actualizar según sea necesario
+const USD_TO_CLP_RATE = 950
 
 // Función para convertir USD a CLP
 const convertUSDToCLP = (usdAmount: number): number => {
@@ -30,7 +30,7 @@ const convertUSDToCLP = (usdAmount: number): number => {
 
 // Función para formatear precios en CLP
 const formatCLPPrice = (clpAmount: number): string => {
-  return clpAmount.toLocaleString('es-CL')
+  return clpAmount.toLocaleString("es-CL")
 }
 
 // Interfaz para los datos de la carta de la API
@@ -115,22 +115,15 @@ interface CardDetails {
   type: string
   artist: string
   imageUri: string
-  marketPrice: number // Ahora en CLP
-  recentPrice: number // Ahora en CLP
-  highPrice: number // Ahora en CLP
-  lowPrice: number // Ahora en CLP
+  marketPrice: number
+  recentPrice: number
+  highPrice: number
+  lowPrice: number
   totalListings: number
-  avgSalesPrice: number // Ahora en CLP
+  avgSalesPrice: number
   totalSales: number
   avgDailySales: number
-  priceHistory: {
-    labels: string[]
-    datasets: {
-      data: number[]
-      color: (opacity?: number) => string
-      strokeWidth: number
-    }[]
-  }
+  basePriceCLP: number // 🔧 NUEVO: Precio base para generar datos
   volatility: number
   priceChange: number
   priceChangeColor: string
@@ -151,7 +144,7 @@ const SAMPLE_LISTINGS = [
   {
     id: "listing1",
     sellerName: "Jonnaa_",
-    price: convertUSDToCLP(2.18), // Convertido de USD
+    price: convertUSDToCLP(2.18),
     condition: "Ligeramente jugado",
     rating: 4.5,
     transactions: 3456,
@@ -160,7 +153,7 @@ const SAMPLE_LISTINGS = [
   {
     id: "listing2",
     sellerName: "CardMaster",
-    price: convertUSDToCLP(2.05), // Convertido de USD
+    price: convertUSDToCLP(2.05),
     condition: "Mint",
     rating: 4.8,
     transactions: 2890,
@@ -169,7 +162,7 @@ const SAMPLE_LISTINGS = [
   {
     id: "listing3",
     sellerName: "PokemonPro",
-    price: convertUSDToCLP(2.32), // Convertido de USD
+    price: convertUSDToCLP(2.32),
     condition: "Near Mint",
     rating: 4.7,
     transactions: 1567,
@@ -178,7 +171,7 @@ const SAMPLE_LISTINGS = [
   {
     id: "listing4",
     sellerName: "TCGExpert",
-    price: convertUSDToCLP(1.97), // Convertido de USD
+    price: convertUSDToCLP(1.97),
     condition: "Excelente",
     rating: 4.9,
     transactions: 4123,
@@ -218,26 +211,25 @@ export default function CardDetailScreen() {
   useEffect(() => {
     const fetchCardDetails = async () => {
       if (!cardId) return
-      
+
       try {
         setLoading(true)
         setError(null)
-        
+
         const response = await fetch(`http://localhost:3000/products/${cardId}`)
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`)
         }
-        
+
         const apiCard: ApiCard = await response.json()
-        
+
         // Transform API data to UI format
         const transformedCard = transformCardData(apiCard)
         setCardDetails(transformedCard)
-        
       } catch (err) {
-        console.error('Error fetching card details:', err)
-        setError(err instanceof Error ? err.message : 'Error desconocido al cargar los detalles de la carta')
+        console.error("Error fetching card details:", err)
+        setError(err instanceof Error ? err.message : "Error desconocido al cargar los detalles de la carta")
       } finally {
         setLoading(false)
       }
@@ -246,26 +238,71 @@ export default function CardDetailScreen() {
     fetchCardDetails()
   }, [cardId])
 
-  // Transform API card data to UI format
-  const transformCardData = (apiCard: ApiCard): CardDetails => {
-    // Convertir precios de USD a CLP
-    const basePriceCLP = convertUSDToCLP(apiCard.price)
-    
-    // Generate mock price history data en CLP
-    const priceHistory = {
-      labels: ["Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic", "Ene", "Feb"],
+  // 🔧 MEJORADO: Función para generar datos de precio consistentes según el rango de tiempo
+  const generatePriceHistoryData = (basePriceCLP: number, timeRange: string, cardId: string) => {
+    // Usar el cardId como seed para generar datos consistentes
+    const seed = cardId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
+
+    // Función para generar números pseudo-aleatorios consistentes
+    const seededRandom = (index: number) => {
+      const x = Math.sin(seed + index) * 10000
+      return x - Math.floor(x)
+    }
+
+    const timeRangeConfig = {
+      "1m": {
+        labels: ["Sem 1", "Sem 2", "Sem 3", "Sem 4"],
+        dataPoints: 4,
+        baseIndex: 0,
+      },
+      "3m": {
+        labels: ["Mes 1", "Mes 2", "Mes 3"],
+        dataPoints: 3,
+        baseIndex: 10,
+      },
+      "6m": {
+        labels: ["Ene", "Feb", "Mar", "Abr", "May", "Jun"],
+        dataPoints: 6,
+        baseIndex: 20,
+      },
+      "1y": {
+        labels: ["Q1", "Q2", "Q3", "Q4"],
+        dataPoints: 4,
+        baseIndex: 30,
+      },
+    }
+
+    const config = timeRangeConfig[timeRange as keyof typeof timeRangeConfig] || timeRangeConfig["3m"]
+
+    // Generar datos consistentes basados en el cardId y el rango de tiempo
+    const priceData = Array(config.dataPoints)
+      .fill(0)
+      .map((_, index) => {
+        const randomFactor = seededRandom(config.baseIndex + index)
+        const variation = 0.8 + randomFactor * 0.4 // Variación entre 80% y 120%
+        return Math.round(basePriceCLP * variation)
+      })
+
+    return {
+      labels: config.labels,
       datasets: [
         {
-          data: Array(12).fill(0).map(() => basePriceCLP * (0.8 + Math.random() * 0.4)),
+          data: priceData,
           color: (opacity = 1) => `rgba(108, 8, 221, ${opacity})`,
           strokeWidth: 2,
         },
       ],
     }
+  }
+
+  // Transform API card data to UI format
+  const transformCardData = (apiCard: ApiCard): CardDetails => {
+    // Convertir precios de USD a CLP
+    const basePriceCLP = convertUSDToCLP(apiCard.price)
 
     // Calculate price change (mock data)
     const priceChange = Math.random() > 0.5 ? Math.random() * 5 : -Math.random() * 5
-    
+
     return {
       id: apiCard._id,
       name: apiCard.name,
@@ -284,7 +321,7 @@ export default function CardDetailScreen() {
       avgSalesPrice: Math.round(basePriceCLP * 1.05),
       totalSales: Math.floor(Math.random() * 100),
       avgDailySales: Math.floor(Math.random() * 10),
-      priceHistory,
+      basePriceCLP, // 🔧 NUEVO: Guardar precio base
       volatility: Math.random(),
       priceChange,
       priceChangeColor: priceChange >= 0 ? "#2ecc71" : "#e74c3c",
@@ -294,6 +331,20 @@ export default function CardDetailScreen() {
       condition: apiCard.condition,
       language: apiCard.language,
     }
+  }
+
+  // 🔧 MEJORADO: Función para obtener datos del gráfico según el rango de tiempo seleccionado
+  const getPriceHistoryData = () => {
+    if (!cardDetails) return { labels: [], datasets: [] }
+    return generatePriceHistoryData(cardDetails.basePriceCLP, timeRange, cardDetails.id)
+  }
+
+  // 🔧 MEJORADO: Función para manejar cambio de rango de tiempo
+  const handleTimeRangeChange = (newTimeRange: string) => {
+    console.log(`📊 Cambiando rango de tiempo de ${timeRange} a: ${newTimeRange}`)
+    console.log(`📊 Carta ID: ${cardDetails?.id}`)
+    console.log(`📊 Precio base: ${cardDetails?.basePriceCLP} CLP`)
+    setTimeRange(newTimeRange)
   }
 
   const sortOptions = [
@@ -338,7 +389,7 @@ export default function CardDetailScreen() {
         <View style={styles.errorContainer}>
           <Feather name="alert-circle" size={48} color="#ff6b6b" />
           <Text style={styles.errorText}>Error al cargar los detalles</Text>
-          <Text style={styles.errorSubtext}>{error || 'No se pudo cargar la información de la carta'}</Text>
+          <Text style={styles.errorSubtext}>{error || "No se pudo cargar la información de la carta"}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
             <Text style={styles.retryButtonText}>Volver</Text>
           </TouchableOpacity>
@@ -375,11 +426,7 @@ export default function CardDetailScreen() {
 
         {/* Card Image - Optimizado para mobile */}
         <View style={styles.cardImageContainer}>
-          <Image 
-            source={{ uri: cardDetails.imageUri }} 
-            style={styles.cardImage} 
-            resizeMode="contain"
-          />
+          <Image source={{ uri: cardDetails.imageUri }} style={styles.cardImage} resizeMode="contain" />
         </View>
 
         {/* Product Details */}
@@ -416,8 +463,6 @@ export default function CardDetailScreen() {
             </View>
           </View>
         </View>
-
-        
 
         {/* Price Points - Actualizado con precios en CLP */}
         <View style={styles.priceSection}>
@@ -472,7 +517,7 @@ export default function CardDetailScreen() {
             </View>
           </View>
 
-          {/* Price Chart */}
+          {/* 🔧 MEJORADO: Price Chart con datos consistentes y botones funcionales */}
           <View style={styles.chartContainer}>
             <View style={styles.chartHeader}>
               <Text style={styles.chartTitle}>Historial de precios</Text>
@@ -481,7 +526,11 @@ export default function CardDetailScreen() {
                   <TouchableOpacity
                     key={option.id}
                     style={[styles.timeRangeOption, timeRange === option.id && styles.timeRangeOptionActive]}
-                    onPress={() => setTimeRange(option.id)}
+                    onPress={() => {
+                      console.log(`📊 Botón presionado: ${option.label} (${option.id})`)
+                      handleTimeRangeChange(option.id)
+                    }}
+                    activeOpacity={0.7}
                   >
                     <Text style={[styles.timeRangeText, timeRange === option.id && styles.timeRangeTextActive]}>
                       {option.label}
@@ -492,7 +541,7 @@ export default function CardDetailScreen() {
             </View>
 
             <LineChart
-              data={cardDetails.priceHistory}
+              data={getPriceHistoryData()}
               width={width - 32}
               height={220}
               chartConfig={chartConfig}
@@ -645,43 +694,43 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   loadingText: {
     fontSize: 16,
-    color: '#666',
+    color: "#666",
     marginTop: 16,
   },
   errorContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   errorText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ff6b6b',
+    fontWeight: "bold",
+    color: "#ff6b6b",
     marginTop: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   errorSubtext: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginTop: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   retryButton: {
-    backgroundColor: '#6c08dd',
+    backgroundColor: "#6c08dd",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
     marginTop: 16,
   },
   retryButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
+    color: "white",
+    fontWeight: "bold",
   },
   header: {
     flexDirection: "row",
