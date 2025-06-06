@@ -31,7 +31,7 @@ export default function RegisterScreen() {
   const [name, setName] = useState("Joaquin Escanilla Arauco")
   const [nationality, setNationality] = useState("Chileno")
   const [location, setLocation] = useState("Licán Ray")
-  const [profileImage, setProfileImage] = useState(null)
+  const [profileImage, setProfileImage] = useState<string | null>(null)
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current

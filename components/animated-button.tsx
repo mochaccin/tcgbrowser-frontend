@@ -1,16 +1,16 @@
-import * as Haptics from "expo-haptics"
 import {
-    Animated,
-    Easing,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    type StyleProp,
-    type TextStyle,
-    type TouchableOpacityProps,
-    type ViewStyle,
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  Animated,
+  Easing,
+  type TouchableOpacityProps,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+  Platform,
 } from "react-native"
+import * as Haptics from "expo-haptics"
 
 interface AnimatedButtonProps extends TouchableOpacityProps {
   title: string
@@ -44,9 +44,9 @@ export default function AnimatedButton({ title, buttonStyle, textStyle, onPress,
     }).start()
   }
 
-  const handlePress = () => {
+  const handlePress = (event: import("react-native").GestureResponderEvent) => {
     if (onPress) {
-      onPress()
+      onPress(event)
     }
   }
 
