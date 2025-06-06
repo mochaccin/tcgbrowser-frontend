@@ -1,9 +1,9 @@
-import { View, TouchableOpacity, Text, StyleSheet } from "react-native"
-import { Home, User, Search, Bookmark } from "lucide-react-native"
+import { Home, Package, Search, User } from "lucide-react-native"
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native"
 
 interface BottomNavigationProps {
-  activeTab: "home" | "profile" | "search" | "collections"
-  onTabPress: (tab: "home" | "profile" | "search" | "collections") => void
+  activeTab: "home" | "profile" | "search" | "inventory"
+  onTabPress: (tab: "home" | "profile" | "search" | "inventory") => void
 }
 
 export default function BottomNavigation({ activeTab, onTabPress }: BottomNavigationProps) {
@@ -19,9 +19,9 @@ export default function BottomNavigation({ activeTab, onTabPress }: BottomNaviga
       icon: Search,
     },
     {
-      id: "collections" as const,
-      label: "Colecciones",
-      icon: Bookmark,
+      id: "inventory" as const,
+      label: "Inventario",
+      icon: Package,
     },
     {
       id: "profile" as const,
