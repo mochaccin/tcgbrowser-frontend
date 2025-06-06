@@ -14,6 +14,8 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  Linking,
+  Alert,
 } from "react-native"
 import { LineChart } from "react-native-chart-kit"
 import NavigationDrawer from "../../components/NavigationDrawer"
@@ -31,6 +33,19 @@ const convertUSDToCLP = (usdAmount: number): number => {
 // Función para formatear precios en CLP
 const formatCLPPrice = (clpAmount: number): string => {
   return clpAmount.toLocaleString("es-CL")
+}
+
+// 🔧 NUEVO: Interfaz para usuarios de la base de datos
+interface User {
+  _id: string
+  username: string
+  name: string
+  email: string
+  img_url?: string
+  location?: string
+  nationality?: string
+  rating?: string
+  contact_info?: Map<string, string> | { [key: string]: string }
 }
 
 // Interfaz para los datos de la carta de la API
@@ -123,7 +138,7 @@ interface CardDetails {
   avgSalesPrice: number
   totalSales: number
   avgDailySales: number
-  basePriceCLP: number // 🔧 NUEVO: Precio base para generar datos
+  basePriceCLP: number
   volatility: number
   priceChange: number
   priceChangeColor: string
@@ -138,46 +153,6 @@ interface CardDetails {
   condition: string
   language: string
 }
-
-// Sample seller listings con precios en CLP
-const SAMPLE_LISTINGS = [
-  {
-    id: "listing1",
-    sellerName: "Jonnaa_",
-    price: convertUSDToCLP(2.18),
-    condition: "Ligeramente jugado",
-    rating: 4.5,
-    transactions: 3456,
-    imageUri: "https://images.pokemontcg.io/base1/35.png",
-  },
-  {
-    id: "listing2",
-    sellerName: "CardMaster",
-    price: convertUSDToCLP(2.05),
-    condition: "Mint",
-    rating: 4.8,
-    transactions: 2890,
-    imageUri: "https://images.pokemontcg.io/base1/35.png",
-  },
-  {
-    id: "listing3",
-    sellerName: "PokemonPro",
-    price: convertUSDToCLP(2.32),
-    condition: "Near Mint",
-    rating: 4.7,
-    transactions: 1567,
-    imageUri: "https://images.pokemontcg.io/base1/35.png",
-  },
-  {
-    id: "listing4",
-    sellerName: "TCGExpert",
-    price: convertUSDToCLP(1.97),
-    condition: "Excelente",
-    rating: 4.9,
-    transactions: 4123,
-    imageUri: "https://images.pokemontcg.io/base1/35.png",
-  },
-]
 
 // Chart configuration
 const chartConfig = {
@@ -202,10 +177,17 @@ export default function CardDetailScreen() {
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [showSortModal, setShowSortModal] = useState(false)
   const [selectedSort, setSelectedSort] = useState("price")
-  const [timeRange, setTimeRange] = useState("3m") // 1m, 3m, 6m, 1y
+  const [timeRange, setTimeRange] = useState("3m")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [cardDetails, setCardDetails] = useState<CardDetails | null>(null)
+
+  // 🔧 NUEVO: Estados para usuarios y modal de contacto
+  const [users, setUsers] = useState<User[]>([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [usersError, setUsersError] = useState<string | null>(null)
+  const [showContactModal, setShowContactModal] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
 
   // Fetch card details from API
   useEffect(() => {
@@ -223,8 +205,6 @@ export default function CardDetailScreen() {
         }
 
         const apiCard: ApiCard = await response.json()
-
-        // Transform API data to UI format
         const transformedCard = transformCardData(apiCard)
         setCardDetails(transformedCard)
       } catch (err) {
@@ -238,12 +218,129 @@ export default function CardDetailScreen() {
     fetchCardDetails()
   }, [cardId])
 
-  // 🔧 MEJORADO: Función para generar datos de precio consistentes según el rango de tiempo
+  // 🔧 NUEVO: Fetch users from API
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setUsersLoading(true)
+        setUsersError(null)
+
+        const response = await fetch("http://localhost:3000/users")
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const usersData: User[] = await response.json()
+        setUsers(usersData)
+        console.log("👥 Usuarios cargados:", usersData.length)
+      } catch (err) {
+        console.error("❌ Error fetching users:", err)
+        setUsersError(err instanceof Error ? err.message : "Error al cargar usuarios")
+      } finally {
+        setUsersLoading(false)
+      }
+    }
+
+    fetchUsers()
+  }, [])
+
+  // 🔧 NUEVO: Función para abrir modal de contacto
+  const openContactModal = (user: User) => {
+    console.log("📞 Abriendo modal de contacto para:", user.username)
+    console.log("📞 Contact info:", user.contact_info)
+    setSelectedUser(user)
+    setShowContactModal(true)
+  }
+
+  // 🔧 NUEVO: Función para manejar links de redes sociales
+  const handleSocialLink = async (platform: string, url: string) => {
+    try {
+      console.log(`🔗 Intentando abrir ${platform}:`, url)
+
+      // Verificar si la URL es válida
+      if (!url || url.trim() === "") {
+        Alert.alert("Error", `No hay ${platform} configurado para este usuario`)
+        return
+      }
+
+      // Asegurar que la URL tenga protocolo
+      let finalUrl = url
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        if (platform === "email") {
+          finalUrl = `mailto:${url}`
+        } else if (platform === "whatsapp") {
+          finalUrl = `whatsapp://send?phone=${url}`
+        } else {
+          finalUrl = `https://${url}`
+        }
+      }
+
+      // Verificar si se puede abrir la URL
+      const canOpen = await Linking.canOpenURL(finalUrl)
+      if (canOpen) {
+        await Linking.openURL(finalUrl)
+        setShowContactModal(false) // Cerrar modal después de abrir link
+      } else {
+        Alert.alert("Error", `No se puede abrir ${platform}. Verifica que tengas la aplicación instalada.`)
+      }
+    } catch (error) {
+      console.error(`❌ Error opening ${platform}:`, error)
+      Alert.alert("Error", `No se pudo abrir ${platform}`)
+    }
+  }
+
+  // 🔧 NUEVO: Función para obtener el icono según la plataforma
+  const getSocialIcon = (platform: string): string => {
+    const iconMap: { [key: string]: string } = {
+      facebook: "facebook",
+      instagram: "instagram",
+      email: "mail",
+      whatsapp: "message-circle",
+      twitter: "twitter",
+      linkedin: "linkedin",
+      website: "globe",
+      phone: "phone",
+      discord: "message-square",
+      telegram: "send",
+    }
+    return iconMap[platform.toLowerCase()] || "link"
+  }
+
+  // 🔧 NUEVO: Función para obtener el color según la plataforma
+  const getSocialColor = (platform: string): string => {
+    const colorMap: { [key: string]: string } = {
+      facebook: "#1877F2",
+      instagram: "#E4405F",
+      email: "#EA4335",
+      whatsapp: "#25D366",
+      twitter: "#1DA1F2",
+      linkedin: "#0A66C2",
+      website: "#6c08dd",
+      phone: "#34C759",
+      discord: "#5865F2",
+      telegram: "#0088CC",
+    }
+    return colorMap[platform.toLowerCase()] || "#6c08dd"
+  }
+
+  // 🔧 NUEVO: Función para obtener información de contacto como objeto
+  const getContactInfo = (
+    contactInfo: Map<string, string> | { [key: string]: string } | undefined,
+  ): { [key: string]: string } => {
+    if (!contactInfo) return {}
+
+    if (contactInfo instanceof Map) {
+      return Object.fromEntries(contactInfo)
+    }
+
+    return contactInfo
+  }
+
+  // Función para generar datos de precio consistentes según el rango de tiempo
   const generatePriceHistoryData = (basePriceCLP: number, timeRange: string, cardId: string) => {
-    // Usar el cardId como seed para generar datos consistentes
     const seed = cardId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
 
-    // Función para generar números pseudo-aleatorios consistentes
     const seededRandom = (index: number) => {
       const x = Math.sin(seed + index) * 10000
       return x - Math.floor(x)
@@ -274,12 +371,11 @@ export default function CardDetailScreen() {
 
     const config = timeRangeConfig[timeRange as keyof typeof timeRangeConfig] || timeRangeConfig["3m"]
 
-    // Generar datos consistentes basados en el cardId y el rango de tiempo
     const priceData = Array(config.dataPoints)
       .fill(0)
       .map((_, index) => {
         const randomFactor = seededRandom(config.baseIndex + index)
-        const variation = 0.8 + randomFactor * 0.4 // Variación entre 80% y 120%
+        const variation = 0.8 + randomFactor * 0.4
         return Math.round(basePriceCLP * variation)
       })
 
@@ -297,10 +393,7 @@ export default function CardDetailScreen() {
 
   // Transform API card data to UI format
   const transformCardData = (apiCard: ApiCard): CardDetails => {
-    // Convertir precios de USD a CLP
     const basePriceCLP = convertUSDToCLP(apiCard.price)
-
-    // Calculate price change (mock data)
     const priceChange = Math.random() > 0.5 ? Math.random() * 5 : -Math.random() * 5
 
     return {
@@ -321,7 +414,7 @@ export default function CardDetailScreen() {
       avgSalesPrice: Math.round(basePriceCLP * 1.05),
       totalSales: Math.floor(Math.random() * 100),
       avgDailySales: Math.floor(Math.random() * 10),
-      basePriceCLP, // 🔧 NUEVO: Guardar precio base
+      basePriceCLP,
       volatility: Math.random(),
       priceChange,
       priceChangeColor: priceChange >= 0 ? "#2ecc71" : "#e74c3c",
@@ -333,17 +426,13 @@ export default function CardDetailScreen() {
     }
   }
 
-  // 🔧 MEJORADO: Función para obtener datos del gráfico según el rango de tiempo seleccionado
   const getPriceHistoryData = () => {
     if (!cardDetails) return { labels: [], datasets: [] }
     return generatePriceHistoryData(cardDetails.basePriceCLP, timeRange, cardDetails.id)
   }
 
-  // 🔧 MEJORADO: Función para manejar cambio de rango de tiempo
   const handleTimeRangeChange = (newTimeRange: string) => {
     console.log(`📊 Cambiando rango de tiempo de ${timeRange} a: ${newTimeRange}`)
-    console.log(`📊 Carta ID: ${cardDetails?.id}`)
-    console.log(`📊 Precio base: ${cardDetails?.basePriceCLP} CLP`)
     setTimeRange(newTimeRange)
   }
 
@@ -361,7 +450,6 @@ export default function CardDetailScreen() {
     { id: "1y", label: "1 año" },
   ]
 
-  // Calculate volatility bars
   const getVolatilityBars = () => {
     const volatility = cardDetails?.volatility || 0.5
     const activeIndex = Math.floor(volatility * 5)
@@ -424,7 +512,7 @@ export default function CardDetailScreen() {
           <Text style={styles.cardTitle}>{cardDetails.fullName}</Text>
         </View>
 
-        {/* Card Image - Optimizado para mobile */}
+        {/* Card Image */}
         <View style={styles.cardImageContainer}>
           <Image source={{ uri: cardDetails.imageUri }} style={styles.cardImage} resizeMode="contain" />
         </View>
@@ -464,7 +552,7 @@ export default function CardDetailScreen() {
           </View>
         </View>
 
-        {/* Price Points - Actualizado con precios en CLP */}
+        {/* Price Points */}
         <View style={styles.priceSection}>
           <View style={styles.priceSectionHeader}>
             <Text style={styles.sectionTitle}>Puntos de precio</Text>
@@ -517,7 +605,7 @@ export default function CardDetailScreen() {
             </View>
           </View>
 
-          {/* 🔧 MEJORADO: Price Chart con datos consistentes y botones funcionales */}
+          {/* Price Chart */}
           <View style={styles.chartContainer}>
             <View style={styles.chartHeader}>
               <Text style={styles.chartTitle}>Historial de precios</Text>
@@ -526,10 +614,7 @@ export default function CardDetailScreen() {
                   <TouchableOpacity
                     key={option.id}
                     style={[styles.timeRangeOption, timeRange === option.id && styles.timeRangeOptionActive]}
-                    onPress={() => {
-                      console.log(`📊 Botón presionado: ${option.label} (${option.id})`)
-                      handleTimeRangeChange(option.id)
-                    }}
+                    onPress={() => handleTimeRangeChange(option.id)}
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.timeRangeText, timeRange === option.id && styles.timeRangeTextActive]}>
@@ -596,56 +681,90 @@ export default function CardDetailScreen() {
           </View>
         </View>
 
-        {/* Listings Section */}
-        <View style={styles.listingsSection}>
-          <View style={styles.listingsHeader}>
-            <Text style={styles.sectionTitle}>{cardDetails.totalListings} listados</Text>
+        {/* 🔧 NUEVA SECCIÓN: Vendedores de la comunidad con estética de listados */}
+        <View style={styles.sellersSection}>
+          <View style={styles.sellersHeader}>
+            <Text style={styles.sectionTitle}>{users.length} vendedores</Text>
             <View style={styles.sortContainer}>
               <Text style={styles.sortLabel}>Ordenar por</Text>
-              <TouchableOpacity style={styles.sortButton} onPress={() => setShowSortModal(true)}>
-                <Text style={styles.sortButtonText}>Precio</Text>
+              <TouchableOpacity style={styles.sortButton}>
+                <Text style={styles.sortButtonText}>Nombre</Text>
                 <Feather name="chevron-down" size={16} color="#666" />
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Listings */}
-          {SAMPLE_LISTINGS.map((listing) => (
-            <View key={listing.id} style={styles.listingCard}>
-              <Image source={{ uri: listing.imageUri }} style={styles.listingImage} />
-              <View style={styles.listingDetails}>
-                <View style={styles.listingHeader}>
-                  <Text style={styles.listingPrice}>$ {formatCLPPrice(listing.price)} CLP</Text>
-                  <View style={styles.conditionBadge}>
-                    <Text style={styles.conditionText}>{listing.condition}</Text>
-                  </View>
-                </View>
-                <View style={styles.sellerInfo}>
-                  <Feather name="user" size={16} color="#666" />
-                  <Text style={styles.sellerName}>{listing.sellerName}</Text>
-                </View>
-                <View style={styles.ratingInfo}>
-                  <View style={styles.starsContainer}>
-                    {Array(5)
-                      .fill(0)
-                      .map((_, i) => (
-                        <Feather
-                          key={i}
-                          name={i < Math.floor(listing.rating) ? "star" : i < listing.rating ? "star" : "star"}
-                          size={14}
-                          color={i < listing.rating ? "#FFD700" : "#e0e0e0"}
-                        />
-                      ))}
-                  </View>
-                  <Text style={styles.ratingText}>{listing.rating}</Text>
-                  <Text style={styles.transactionsText}>{listing.transactions.toLocaleString()} transacciones</Text>
-                </View>
-                <TouchableOpacity style={styles.sellerProfileButton} onPress={() => router.push("/profile")}>
-                  <Text style={styles.sellerProfileButtonText}>Perfil Vendedor</Text>
-                </TouchableOpacity>
-              </View>
+          {usersLoading && (
+            <View style={styles.sellersLoadingContainer}>
+              <ActivityIndicator size="small" color="#6c08dd" />
+              <Text style={styles.sellersLoadingText}>Cargando vendedores...</Text>
             </View>
-          ))}
+          )}
+
+          {usersError && (
+            <View style={styles.sellersErrorContainer}>
+              <Text style={styles.sellersErrorText}>{usersError}</Text>
+            </View>
+          )}
+
+          {!usersLoading && !usersError && users.length > 0 && (
+            <View style={styles.sellersContainer}>
+              {users.map((user) => (
+                <View key={user._id} style={styles.sellerCard}>
+                  <Image
+                    source={{
+                      uri:
+                        user.img_url || "https://via.placeholder.com/60x80/6c08dd/ffffff?text=" + user.name.charAt(0),
+                    }}
+                    style={styles.sellerImage}
+                  />
+                  <View style={styles.sellerDetails}>
+                    <View style={styles.sellerHeader}>
+                      <Text style={styles.sellerPrice}>Disponible</Text>
+                      <View style={styles.sellerStatusBadge}>
+                        <Text style={styles.sellerStatusText}>Activo</Text>
+                      </View>
+                    </View>
+                    <View style={styles.sellerInfo}>
+                      <Feather name="user" size={16} color="#666" />
+                      <Text style={styles.sellerName}>{user.name}</Text>
+                    </View>
+                    <View style={styles.sellerRatingInfo}>
+                      <View style={styles.sellerStarsContainer}>
+                        {Array(5)
+                          .fill(0)
+                          .map((_, i) => (
+                            <Feather
+                              key={i}
+                              name="star"
+                              size={14}
+                              color={i < Number.parseFloat(user.rating || "4.5") ? "#FFD700" : "#e0e0e0"}
+                            />
+                          ))}
+                      </View>
+                      <Text style={styles.sellerRatingText}>{user.rating || "4.5"}</Text>
+                      <Text style={styles.sellerLocationText}>{user.location || "Ubicación no especificada"}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.sellerContactButton}
+                      onPress={() => openContactModal(user)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.sellerContactButtonText}>Contactar Vendedor</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {!usersLoading && !usersError && users.length === 0 && (
+            <View style={styles.noSellersContainer}>
+              <Feather name="users" size={48} color="#ccc" />
+              <Text style={styles.noSellersText}>No hay vendedores disponibles</Text>
+              <Text style={styles.noSellersSubtext}>Vuelve más tarde para ver nuevos vendedores</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -680,6 +799,75 @@ export default function CardDetailScreen() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 🔧 NUEVO: Modal de contacto con redes sociales */}
+      <Modal
+        visible={showContactModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowContactModal(false)}
+      >
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowContactModal(false)}>
+          <View style={styles.contactModalContainer}>
+            <View style={styles.contactModalHeader}>
+              <View style={styles.contactModalUserInfo}>
+                <Image
+                  source={{
+                    uri:
+                      selectedUser?.img_url ||
+                      "https://via.placeholder.com/60x60/6c08dd/ffffff?text=" + (selectedUser?.name.charAt(0) || "U"),
+                  }}
+                  style={styles.contactModalAvatar}
+                />
+                <View style={styles.contactModalUserDetails}>
+                  <Text style={styles.contactModalUserName}>{selectedUser?.name}</Text>
+                  <Text style={styles.contactModalUserUsername}>@{selectedUser?.username}</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setShowContactModal(false)}>
+                <Feather name="x" size={24} color="black" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.contactModalContent}>
+              <Text style={styles.contactModalTitle}>Información de contacto</Text>
+
+              {(() => {
+                const contactInfo = getContactInfo(selectedUser?.contact_info)
+                const contactEntries = Object.entries(contactInfo)
+
+                if (contactEntries.length === 0) {
+                  return (
+                    <View style={styles.noContactContainer}>
+                      <Feather name="info" size={48} color="#ccc" />
+                      <Text style={styles.noContactText}>Este usuario no ha configurado información de contacto</Text>
+                    </View>
+                  )
+                }
+
+                return (
+                  <View style={styles.socialLinksContainer}>
+                    {contactEntries.map(([platform, url]) => (
+                      <TouchableOpacity
+                        key={platform}
+                        style={[styles.socialLinkButton, { backgroundColor: getSocialColor(platform) }]}
+                        onPress={() => handleSocialLink(platform, url)}
+                        activeOpacity={0.8}
+                      >
+                        <Feather name={getSocialIcon(platform)} size={20} color="#fff" />
+                        <Text style={styles.socialLinkText}>
+                          {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                        </Text>
+                        <Feather name="external-link" size={16} color="#fff" />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )
+              })()}
+            </View>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -774,8 +962,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   cardImage: {
-    width: Math.min(width * 0.6, 280), // Máximo 280px de ancho
-    height: Math.min(width * 0.84, 392), // Mantiene proporción de carta estándar
+    width: Math.min(width * 0.6, 280),
+    height: Math.min(width * 0.84, 392),
     maxWidth: 280,
     maxHeight: 392,
     borderRadius: 12,
@@ -822,34 +1010,6 @@ const styles = StyleSheet.create({
     color: "#333",
     flex: 1,
     textAlign: "right",
-  },
-  attacksContainer: {
-    gap: 16,
-  },
-  attackItem: {
-    backgroundColor: "#f8f9fa",
-    borderRadius: 8,
-    padding: 12,
-  },
-  attackHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  attackName: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  attackDamage: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#6c08dd",
-  },
-  attackText: {
-    fontSize: 14,
-    color: "#666",
-    lineHeight: 20,
   },
   priceSection: {
     backgroundColor: "#fff",
@@ -1022,74 +1182,78 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
   },
-  listingsSection: {
+  // 🔧 NUEVOS ESTILOS: Sección de vendedores con estética de listados
+  sellersSection: {
     backgroundColor: "#fff",
     marginBottom: 16,
     paddingHorizontal: 16,
     paddingVertical: 20,
   },
-  listingsHeader: {
+  sellersHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
-  sortContainer: {
+  sellersLoadingContainer: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
     gap: 8,
   },
-  sortLabel: {
+  sellersLoadingText: {
     fontSize: 14,
     color: "#666",
   },
-  sortButton: {
-    flexDirection: "row",
+  sellersErrorContainer: {
+    paddingVertical: 20,
     alignItems: "center",
-    backgroundColor: "#f8f9fa",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    gap: 4,
   },
-  sortButtonText: {
+  sellersErrorText: {
     fontSize: 14,
-    color: "#333",
+    color: "#ff6b6b",
+    textAlign: "center",
   },
-  listingCard: {
+  sellersContainer: {
+    gap: 12,
+  },
+  sellerCard: {
     flexDirection: "row",
     backgroundColor: "#f8f9fa",
     borderRadius: 12,
     padding: 12,
-    marginBottom: 12,
     gap: 12,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
-  listingImage: {
+  sellerImage: {
     width: 60,
     height: 80,
-    borderRadius: 6,
+    borderRadius: 8,
+    backgroundColor: "#f0f0f0",
   },
-  listingDetails: {
+  sellerDetails: {
     flex: 1,
     gap: 6,
   },
-  listingHeader: {
+  sellerHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  listingPrice: {
+  sellerPrice: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: "#2ecc71",
   },
-  conditionBadge: {
+  sellerStatusBadge: {
     backgroundColor: "#e8f5e8",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
   },
-  conditionText: {
+  sellerStatusText: {
     fontSize: 12,
     color: "#2ecc71",
     fontWeight: "500",
@@ -1104,26 +1268,26 @@ const styles = StyleSheet.create({
     color: "#333",
     fontWeight: "500",
   },
-  ratingInfo: {
+  sellerRatingInfo: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
   },
-  starsContainer: {
+  sellerStarsContainer: {
     flexDirection: "row",
     gap: 2,
   },
-  ratingText: {
+  sellerRatingText: {
     fontSize: 12,
     color: "#333",
     fontWeight: "500",
     marginLeft: 4,
   },
-  transactionsText: {
+  sellerLocationText: {
     fontSize: 12,
     color: "#666",
   },
-  sellerProfileButton: {
+  sellerContactButton: {
     backgroundColor: "#6c08dd",
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -1131,10 +1295,102 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginTop: 4,
   },
-  sellerProfileButtonText: {
+  sellerContactButtonText: {
     color: "#fff",
     fontSize: 12,
     fontWeight: "bold",
+  },
+  noSellersContainer: {
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  noSellersText: {
+    fontSize: 16,
+    color: "#666",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  noSellersSubtext: {
+    fontSize: 14,
+    color: "#999",
+    marginTop: 8,
+    textAlign: "center",
+  },
+  // 🔧 NUEVOS ESTILOS: Modal de contacto
+  contactModalContainer: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "70%",
+    marginTop: "auto",
+  },
+  contactModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  contactModalUserInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  contactModalAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  contactModalUserDetails: {
+    flex: 1,
+  },
+  contactModalUserName: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  contactModalUserUsername: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 2,
+  },
+  contactModalContent: {
+    padding: 20,
+  },
+  contactModalTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 16,
+  },
+  socialLinksContainer: {
+    gap: 12,
+  },
+  socialLinkButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  socialLinkText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
+    flex: 1,
+  },
+  noContactContainer: {
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  noContactText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginTop: 16,
+    lineHeight: 24,
   },
   modalOverlay: {
     flex: 1,
