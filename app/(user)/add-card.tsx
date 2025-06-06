@@ -3,8 +3,10 @@ import { Feather } from "@expo/vector-icons"
 import * as ImagePicker from "expo-image-picker"
 import { router } from "expo-router"
 import { StatusBar } from "expo-status-bar"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
+  Alert,
+  FlatList,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -17,32 +19,27 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator,
-  Alert,
 } from "react-native"
 import CollectionToast from "../../components/CollectionToast"
+import { useProductStore } from "../../store/createProductStore"
+import { useUserStore } from "../../store/userStore"
 
-// Interfaces basadas en tu schema de Product
-interface ProductImages {
-  small?: string
-  large?: string
-  symbol?: string
-  logo?: string
-}
+const RARITIES = ["Común", "Poco Común", "Rara", "Ultra Rara", "Secreta Rara", "Holo Rara", "Full Art"]
 
-interface SetInfo {
-  id: string
+const CARD_CONDITIONS = [
+  "Mint (Perfecta)",
+  "Near Mint (Casi perfecta)",
+  "Excellent (Excelente)",
+  "Jugada ligeramente",
+  "Jugada",
+  "Muy jugada",
+  "Dañada",
+]
+
+interface Product {
+  _id: string
   name: string
-  series?: string
-  printedTotal?: number
-  total?: number
-  ptcgoCode?: string
-  releaseDate?: string
-}
-
-interface CreateProductData {
   product_type: string
-  name: string
   description?: string
   tcg_id?: string
   supertype?: string
@@ -50,116 +47,155 @@ interface CreateProductData {
   hp?: string
   types?: string[]
   rarity?: string
-  setInfo?: SetInfo
+  set?: {
+    id: string
+    name: string
+    series?: string
+    printedTotal?: number
+    total?: number
+    releaseDate?: string
+    images?: {
+      small?: string
+      large?: string
+      symbol?: string
+      logo?: string
+    }
+  }
   number?: string
   artist?: string
-  images?: ProductImages
+  images?: {
+    small?: string
+    large?: string
+    symbol?: string
+    logo?: string
+  }
   stock_quantity: number
   price: number
   cost_price?: number
-  is_available: boolean
+  is_available?: boolean
   condition?: string
   language?: string
   tags?: string[]
   notes?: string
+  abilities?: {
+    name: string
+    text: string
+    type: string
+  }[]
+  attacks?: {
+    name: string
+    cost?: string[]
+    convertedEnergyCost?: number
+    damage?: string
+    text?: string
+  }[]
 }
 
-// Opciones para los dropdowns
-const PRODUCT_TYPES = [
-  { value: "card", label: "Carta Individual" },
-  { value: "booster_pack", label: "Sobre/Booster" },
-  { value: "expansion_pack", label: "Pack de Expansión" },
-  { value: "set", label: "Set Completo" },
-]
+export default function AddInventoryItemScreen() {
+  // Stores
+  const { products, fetchProducts, createProduct } = useProductStore()
+  const { currentUser, addProductToInventory } = useUserStore()
 
-const SUPERTYPES = ["Pokémon", "Trainer", "Energy"]
-
-const POKEMON_TYPES = [
-  "Grass",
-  "Fire",
-  "Water",
-  "Lightning",
-  "Psychic",
-  "Fighting",
-  "Darkness",
-  "Metal",
-  "Fairy",
-  "Dragon",
-  "Colorless",
-]
-
-const RARITIES = [
-  "Common",
-  "Uncommon",
-  "Rare",
-  "Rare Holo",
-  "Rare Ultra",
-  "Rare Secret",
-  "Rare Rainbow",
-  "Promo",
-  "Amazing Rare",
-]
-
-const CARD_CONDITIONS = ["Mint", "Near Mint", "Excellent", "Good", "Light Played", "Played", "Heavy Played", "Damaged"]
-
-const LANGUAGES = ["English", "Spanish", "Japanese", "French", "German", "Italian"]
-
-export default function AddProductScreen() {
-  // Form state básico
-  const [productType, setProductType] = useState("card")
-  const [name, setName] = useState("")
-  const [description, setDescription] = useState("")
-  const [tcgId, setTcgId] = useState("")
-  const [price, setPrice] = useState("")
-  const [costPrice, setCostPrice] = useState("")
-  const [stockQuantity, setStockQuantity] = useState("1")
-  const [isAvailable, setIsAvailable] = useState(true)
-  const [condition, setCondition] = useState("Near Mint")
-  const [language, setLanguage] = useState("English")
-  const [notes, setNotes] = useState("")
-
-  // Card specific fields
-  const [supertype, setSupertype] = useState("")
-  const [subtypes, setSubtypes] = useState<string[]>([])
-  const [hp, setHp] = useState("")
-  const [types, setTypes] = useState<string[]>([])
-  const [rarity, setRarity] = useState("")
-  const [number, setNumber] = useState("")
-  const [artist, setArtist] = useState("")
-
-  // Set information
-  const [setId, setSetId] = useState("")
-  const [setInfoName, setSetInfoName] = useState("")
-  const [setSeries, setSetSeries] = useState("")
-
-  // Images
+  // Form state
+  const [itemName, setItemName] = useState("")
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [selectedSet, setSelectedSet] = useState("")
+  const [selectedRarity, setSelectedRarity] = useState(RARITIES[1]) // "Poco Común"
+  const [selectedCondition, setSelectedCondition] = useState(CARD_CONDITIONS[3]) // "Jugada ligeramente"
+  const [isForSale, setIsForSale] = useState(true)
+  const [price, setPrice] = useState("0.00")
   const [imageUri, setImageUri] = useState<string | null>(null)
-  const [imageUrlSmall, setImageUrlSmall] = useState("")
-  const [imageUrlLarge, setImageUrlLarge] = useState("")
 
-  // UI state
-  const [loading, setLoading] = useState(false)
+  // Autocomplete state
+  const [showAutocomplete, setShowAutocomplete] = useState(false)
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
+
+  // Toast state
   const [toastVisible, setToastVisible] = useState(false)
-  const [publishedProduct, setPublishedProduct] = useState<{ name: string; imageUri: string } | null>(null)
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
+  const [publishedItem, setPublishedItem] = useState<{ name: string; imageUri: string } | null>(null)
 
-  // Format price input
-  const handlePriceChange = (text: string, setter: (value: string) => void) => {
-    const numericValue = text.replace(/[^0-9.]/g, "")
-    const parts = numericValue.split(".")
-    if (parts.length > 2) return
+  // Dropdown visibility states
+  const [activeDropdown, setActiveDropdown] = useState<"rarity" | "condition" | null>(null)
 
-    if (parts.length === 2 && parts[1].length > 2) {
-      parts[1] = parts[1].substring(0, 2)
-      setter(parts.join("."))
+  // Image picker modal state
+  const [showImagePickerModal, setShowImagePickerModal] = useState(false)
+
+  // Loading state
+  const [isLoading, setIsLoading] = useState(false)
+
+  // Check authentication on mount
+  useEffect(() => {
+    if (!currentUser) {
+      Alert.alert("Error", "Debes iniciar sesión para añadir productos", [
+        { text: "OK", onPress: () => router.push("/login") },
+      ])
+      return
+    }
+  }, [currentUser])
+
+  // Fetch products on component mount
+  useEffect(() => {
+    fetchProducts()
+  }, [fetchProducts])
+
+  // Handle item name change and filter products
+  const handleItemNameChange = (text: string) => {
+    setItemName(text)
+
+    if (text.length > 0) {
+      const filtered = products.filter((product) => product.name.toLowerCase().includes(text.toLowerCase()))
+      setFilteredProducts(filtered)
+      setShowAutocomplete(filtered.length > 0)
     } else {
-      setter(numericValue)
+      setShowAutocomplete(false)
+      setFilteredProducts([])
+      setSelectedProduct(null)
+      // Reset form when clearing name
+      setSelectedSet("")
+      setSelectedRarity(RARITIES[1])
+      setPrice("0.00")
+      setImageUri(null)
     }
   }
 
-  // Image picker functions
-  const pickImage = async () => {
+  // Handle product selection from autocomplete
+  const handleProductSelect = (product: Product) => {
+    setSelectedProduct(product)
+    setItemName(product.name)
+    setSelectedSet(product.set?.name || "")
+    setSelectedRarity(product.rarity || RARITIES[1])
+    setPrice(product.price.toString())
+    setImageUri(product.images?.large || product.images?.small || null)
+    setShowAutocomplete(false)
+  }
+
+  // Format price input
+  const handlePriceChange = (text: string) => {
+    // Remove non-numeric characters except decimal point
+    const numericValue = text.replace(/[^0-9.]/g, "")
+
+    // Ensure only one decimal point
+    const parts = numericValue.split(".")
+    if (parts.length > 2) {
+      return
+    }
+
+    // Format with two decimal places if there's a decimal point
+    if (parts.length === 2) {
+      if (parts[1].length > 2) {
+        parts[1] = parts[1].substring(0, 2)
+      }
+      setPrice(parts.join("."))
+    } else {
+      setPrice(numericValue)
+    }
+  }
+
+  // Pick image from library
+  const pickImageFromLibrary = async () => {
     try {
+      setShowImagePickerModal(false)
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -172,13 +208,17 @@ export default function AddProductScreen() {
       }
     } catch (error) {
       console.error("Error picking image:", error)
-      Alert.alert("Error", "Error al seleccionar la imagen")
+      Alert.alert("Error", "Error al seleccionar la imagen. Inténtalo de nuevo.")
     }
   }
 
-  const takePhoto = async () => {
+  // Take photo with camera
+  const takePhotoWithCamera = async () => {
     try {
+      setShowImagePickerModal(false)
+
       const cameraPermission = await ImagePicker.requestCameraPermissionsAsync()
+
       if (cameraPermission.status !== "granted") {
         Alert.alert("Permisos", "Se necesitan permisos de cámara para tomar fotos")
         return
@@ -195,159 +235,126 @@ export default function AddProductScreen() {
       }
     } catch (error) {
       console.error("Error taking photo:", error)
-      Alert.alert("Error", "Error al tomar la foto")
+      Alert.alert("Error", "Error al tomar la foto. Inténtalo de nuevo.")
     }
   }
 
+  // Show image picker modal
   const showImageOptions = () => {
-    if (Platform.OS === "web") {
-      pickImage()
-      return
-    }
-
-    Alert.alert("Seleccionar imagen", "¿Cómo quieres añadir una imagen?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Tomar foto", onPress: takePhoto },
-      { text: "Elegir de la galería", onPress: pickImage },
-    ])
+    setShowImagePickerModal(true)
   }
 
-  // Create product
-  const createProduct = async () => {
-    if (!name.trim()) {
-      Alert.alert("Error", "El nombre del producto es obligatorio")
+  // Remove selected image
+  const removeImage = () => {
+    setImageUri(null)
+  }
+
+  // Publish item
+  const publishItem = async () => {
+    if (!itemName.trim()) {
+      Alert.alert("Error", "Por favor, ingresa un nombre para el artículo")
       return
     }
 
-    if (!price || Number.parseFloat(price) <= 0) {
-      Alert.alert("Error", "El precio debe ser mayor a 0")
+    if (!currentUser) {
+      Alert.alert("Error", "Debes iniciar sesión para añadir productos")
       return
     }
+
+    setIsLoading(true)
 
     try {
-      setLoading(true)
-
-      // Preparar datos del producto
-      const productData: CreateProductData = {
-        product_type: productType,
-        name: name.trim(),
-        description: description.trim() || undefined,
-        tcg_id: tcgId.trim() || undefined,
-        price: Number.parseFloat(price),
-        cost_price: costPrice ? Number.parseFloat(costPrice) : undefined,
-        stock_quantity: Number.parseInt(stockQuantity) || 1,
-        is_available: isAvailable,
-        condition: condition || undefined,
-        language: language || undefined,
-        notes: notes.trim() || undefined,
+      // Prepare product data according to your DTO schema
+      const productData = {
+        product_type: "card", // Assuming this is always a card
+        name: itemName,
+        description: selectedProduct?.description || `${itemName} - ${selectedRarity}`,
+        tcg_id: selectedProduct?.tcg_id,
+        supertype: selectedProduct?.supertype,
+        subtypes: selectedProduct?.subtypes,
+        hp: selectedProduct?.hp,
+        types: selectedProduct?.types,
+        rarity: selectedRarity,
+        set: selectedProduct?.set,
+        number: selectedProduct?.number,
+        artist: selectedProduct?.artist,
+        images: selectedProduct?.images || (imageUri ? { large: imageUri } : undefined),
+        stock_quantity: 1, // Default to 1 for new inventory item
+        price: Number.parseFloat(price) || 0,
+        cost_price: selectedProduct?.cost_price,
+        is_available: isForSale,
+        condition: selectedCondition,
+        language: selectedProduct?.language || "es",
+        tags: selectedProduct?.tags,
+        notes: selectedProduct?.notes,
+        abilities: selectedProduct?.abilities,
+        attacks: selectedProduct?.attacks,
       }
 
-      // Agregar campos específicos de cartas si es necesario
-      if (productType === "card") {
-        if (supertype) productData.supertype = supertype
-        if (subtypes.length > 0) productData.subtypes = subtypes
-        if (hp) productData.hp = hp
-        if (types.length > 0) productData.types = types
-        if (rarity) productData.rarity = rarity
-        if (number) productData.number = number
-        if (artist) productData.artist = artist
+      console.log("🚀 SCREEN: Creando producto:", productData)
 
-        // Set information
-        if (setId || setInfoName) {
-          productData.setInfo = {
-            id: setId || `set_${Date.now()}`,
-            name: setInfoName || "Unknown Set",
-            series: setSeries || undefined,
-          }
-        }
-      }
+      // Create the product
+      const newProduct = await createProduct(productData)
+      console.log("✅ SCREEN: Producto creado:", newProduct)
 
-      // Images
-      if (imageUri || imageUrlSmall || imageUrlLarge) {
-        productData.images = {
-          small: imageUrlSmall || imageUri || undefined,
-          large: imageUrlLarge || imageUri || undefined,
-        }
-      }
+      // Add product to user's inventory using the integrated store
+      await addProductToInventory(newProduct._id)
+      console.log("✅ SCREEN: Producto agregado al inventory")
 
-      console.log("🚀 Creating product:", productData)
-
-      // Llamada al API
-      const response = await fetch("http://localhost:3000/products", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(productData),
+      // Set published item for toast
+      setPublishedItem({
+        name: itemName,
+        imageUri:
+          imageUri ||
+          selectedProduct?.images?.large ||
+          selectedProduct?.images?.small ||
+          "https://images.pokemontcg.io/sv4pt5/1.png",
       })
 
-      if (!response.ok) {
-        const errorData = await response.text()
-        throw new Error(`Error ${response.status}: ${errorData}`)
-      }
-
-      const createdProduct = await response.json()
-      console.log("✅ Product created:", createdProduct)
-
-      // Mostrar toast de éxito
-      setPublishedProduct({
-        name: name,
-        imageUri: imageUri || imageUrlSmall || "https://images.pokemontcg.io/sv4pt5/1.png",
-      })
+      // Show toast
       setToastVisible(true)
 
-      // Limpiar formulario
-      resetForm()
+      // Reset form
+      setItemName("")
+      setSelectedProduct(null)
+      setSelectedSet("")
+      setSelectedRarity(RARITIES[1])
+      setSelectedCondition(CARD_CONDITIONS[3])
+      setIsForSale(true)
+      setPrice("0.00")
+      setImageUri(null)
 
-      // Navegar de vuelta después de un delay
+      // Navigate back to inventory after a delay
       setTimeout(() => {
-        router.back()
+        router.push("/inventory")
       }, 2000)
     } catch (error) {
-      console.error("❌ Error creating product:", error)
-      Alert.alert("Error", "No se pudo crear el producto. Inténtalo de nuevo.")
+      console.error("❌ SCREEN: Error creating product:", error)
+      Alert.alert("Error", "Error al crear el producto. Inténtalo de nuevo.")
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
-  }
-
-  // Reset form
-  const resetForm = () => {
-    setName("")
-    setDescription("")
-    setTcgId("")
-    setPrice("")
-    setCostPrice("")
-    setStockQuantity("1")
-    setSupertype("")
-    setSubtypes([])
-    setHp("")
-    setTypes([])
-    setRarity("")
-    setNumber("")
-    setArtist("")
-    setSetId("")
-    setSetInfoName("")
-    setSetSeries("")
-    setImageUri(null)
-    setImageUrlSmall("")
-    setImageUrlLarge("")
-    setNotes("")
   }
 
   // Toggle dropdown
-  const toggleDropdown = (dropdown: string) => {
+  const toggleDropdown = (dropdown: "rarity" | "condition") => {
     setActiveDropdown(activeDropdown === dropdown ? null : dropdown)
   }
 
-  // Toggle array values (for types, subtypes)
-  const toggleArrayValue = (array: string[], value: string, setter: (arr: string[]) => void) => {
-    if (array.includes(value)) {
-      setter(array.filter((item) => item !== value))
-    } else {
-      setter([...array, value])
-    }
-  }
+  // Render autocomplete item
+  const renderAutocompleteItem = ({ item }: { item: Product }) => (
+    <TouchableOpacity style={styles.autocompleteItem} onPress={() => handleProductSelect(item)}>
+      <View style={styles.autocompleteItemContent}>
+        {item.images?.small && <Image source={{ uri: item.images.small }} style={styles.autocompleteItemImage} />}
+        <View style={styles.autocompleteItemText}>
+          <Text style={styles.autocompleteItemName}>{item.name}</Text>
+          <Text style={styles.autocompleteItemDetails}>
+            {item.set?.name} • {item.rarity} • ${item.price}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  )
 
   return (
     <SafeAreaView style={styles.container}>
@@ -356,10 +363,10 @@ export default function AddProductScreen() {
       {/* Toast notification */}
       <CollectionToast
         visible={toastVisible}
-        message="Producto añadido al inventario"
-        title="¡Producto creado!"
-        collectionName={publishedProduct?.name}
-        collectionImage={publishedProduct?.imageUri}
+        message="Artículo añadido a tu inventario"
+        title="¡Artículo publicado!"
+        collectionName={publishedItem?.name}
+        collectionImage={publishedItem?.imageUri}
         onDismiss={() => setToastVisible(false)}
         type="success"
         duration={3000}
@@ -370,208 +377,98 @@ export default function AddProductScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color="black" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Crear Producto</Text>
+        <Text style={styles.headerTitle}>Publicar artículo</Text>
         <View style={styles.headerRight} />
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardAvoidingView}>
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.formContainer}>
-            {/* Product Type */}
-            <Text style={styles.inputLabel}>Tipo de Producto *</Text>
-            <TouchableOpacity style={styles.dropdownButton} onPress={() => toggleDropdown("productType")}>
-              <Text style={styles.dropdownButtonText}>
-                {PRODUCT_TYPES.find((type) => type.value === productType)?.label}
-              </Text>
+            {/* Item Name with Autocomplete */}
+            <Text style={styles.inputLabel}>Nombre del artículo</Text>
+            <View style={styles.autocompleteContainer}>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Ej: Charizard ex Holo"
+                value={itemName}
+                onChangeText={handleItemNameChange}
+                maxLength={50}
+              />
+
+              {/* Autocomplete Dropdown */}
+              {showAutocomplete && (
+                <View style={styles.autocompleteDropdown}>
+                  <FlatList
+                    data={filteredProducts.slice(0, 5)} // Limit to 5 results
+                    renderItem={renderAutocompleteItem}
+                    keyExtractor={(item) => item._id}
+                    style={styles.autocompleteList}
+                    keyboardShouldPersistTaps="handled"
+                  />
+                </View>
+              )}
+            </View>
+
+            {/* Set/Collection (Read-only when product selected) */}
+            <Text style={styles.inputLabel}>Set/Colección</Text>
+            <TextInput
+              style={[styles.textInput, selectedProduct && styles.readOnlyInput]}
+              placeholder="Set será llenado automáticamente"
+              value={selectedSet}
+              editable={!selectedProduct}
+              onChangeText={setSelectedSet}
+            />
+
+            {/* Rarity */}
+            <Text style={styles.inputLabel}>Rareza</Text>
+            <TouchableOpacity style={styles.dropdownButton} onPress={() => toggleDropdown("rarity")}>
+              <Text style={styles.dropdownButtonText}>{selectedRarity}</Text>
               <Feather name="chevron-down" size={16} color="#666" />
             </TouchableOpacity>
 
-            {/* Product Name */}
-            <Text style={styles.inputLabel}>Nombre del Producto *</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Ej: Charizard ex"
-              value={name}
-              onChangeText={setName}
-              maxLength={100}
-            />
+            {/* Card Condition */}
+            <Text style={styles.inputLabel}>Estado de la carta</Text>
+            <TouchableOpacity style={styles.dropdownButton} onPress={() => toggleDropdown("condition")}>
+              <Text style={styles.dropdownButtonText}>{selectedCondition}</Text>
+              <Feather name="chevron-down" size={16} color="#666" />
+            </TouchableOpacity>
 
-            {/* Description */}
-            <Text style={styles.inputLabel}>Descripción</Text>
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              placeholder="Descripción del producto..."
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={3}
-              maxLength={500}
-            />
-
-            {/* TCG ID */}
-            <Text style={styles.inputLabel}>TCG ID</Text>
-            <TextInput style={styles.textInput} placeholder="Ej: sv4pt5-6" value={tcgId} onChangeText={setTcgId} />
-
-            {/* Card-specific fields */}
-            {productType === "card" && (
-              <>
-                {/* Supertype and HP */}
-                <View style={styles.rowContainer}>
-                  <View style={styles.halfColumn}>
-                    <Text style={styles.inputLabel}>Supertipo</Text>
-                    <TouchableOpacity style={styles.dropdownButton} onPress={() => toggleDropdown("supertype")}>
-                      <Text style={styles.dropdownButtonText}>{supertype || "Seleccionar"}</Text>
-                      <Feather name="chevron-down" size={16} color="#666" />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.halfColumn}>
-                    <Text style={styles.inputLabel}>HP</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="120"
-                      value={hp}
-                      onChangeText={setHp}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </View>
-
-                {/* Types */}
-                <Text style={styles.inputLabel}>Tipos de Pokémon</Text>
-                <TouchableOpacity style={styles.dropdownButton} onPress={() => toggleDropdown("types")}>
-                  <Text style={styles.dropdownButtonText}>
-                    {types.length > 0 ? types.join(", ") : "Seleccionar tipos"}
-                  </Text>
-                  <Feather name="chevron-down" size={16} color="#666" />
-                </TouchableOpacity>
-
-                {/* Rarity and Number */}
-                <View style={styles.rowContainer}>
-                  <View style={styles.halfColumn}>
-                    <Text style={styles.inputLabel}>Rareza</Text>
-                    <TouchableOpacity style={styles.dropdownButton} onPress={() => toggleDropdown("rarity")}>
-                      <Text style={styles.dropdownButtonText}>{rarity || "Seleccionar"}</Text>
-                      <Feather name="chevron-down" size={16} color="#666" />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.halfColumn}>
-                    <Text style={styles.inputLabel}>Número</Text>
-                    <TextInput style={styles.textInput} placeholder="006" value={number} onChangeText={setNumber} />
-                  </View>
-                </View>
-
-                {/* Artist */}
-                <Text style={styles.inputLabel}>Artista</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Nombre del artista"
-                  value={artist}
-                  onChangeText={setArtist}
-                />
-
-                {/* Set Information */}
-                <Text style={styles.sectionTitle}>Información del Set</Text>
-                <Text style={styles.inputLabel}>Nombre del Set</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Ej: Prismatic Evolutions"
-                  value={setInfoName}
-                  onChangeText={setSetInfoName}
-                />
-
-                <Text style={styles.inputLabel}>Serie</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Ej: Scarlet & Violet"
-                  value={setSeries}
-                  onChangeText={setSetSeries}
-                />
-              </>
-            )}
-
-            {/* Pricing */}
-            <Text style={styles.sectionTitle}>Precio e Inventario</Text>
-            <View style={styles.rowContainer}>
-              <View style={styles.halfColumn}>
-                <Text style={styles.inputLabel}>Precio de Venta (CLP) *</Text>
-                <View style={styles.priceInputContainer}>
-                  <Text style={styles.currencySymbol}>$</Text>
-                  <TextInput
-                    style={styles.priceInput}
-                    placeholder="0.00"
-                    value={price}
-                    onChangeText={(text) => handlePriceChange(text, setPrice)}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-              <View style={styles.halfColumn}>
-                <Text style={styles.inputLabel}>Precio de Costo (CLP)</Text>
-                <View style={styles.priceInputContainer}>
-                  <Text style={styles.currencySymbol}>$</Text>
-                  <TextInput
-                    style={styles.priceInput}
-                    placeholder="0.00"
-                    value={costPrice}
-                    onChangeText={(text) => handlePriceChange(text, setCostPrice)}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
+            {/* Available for Sale Toggle */}
+            <View style={styles.toggleContainer}>
+              <Text style={styles.inputLabel}>Disponible para venta</Text>
+              <Switch
+                trackColor={{ false: "#dadada", true: "#a970e1" }}
+                thumbColor={isForSale ? "#6c08dd" : "#f4f3f4"}
+                ios_backgroundColor="#dadada"
+                onValueChange={() => setIsForSale(!isForSale)}
+                value={isForSale}
+              />
             </View>
 
-            {/* Stock and Availability */}
-            <View style={styles.rowContainer}>
-              <View style={styles.halfColumn}>
-                <Text style={styles.inputLabel}>Cantidad en Stock</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="1"
-                  value={stockQuantity}
-                  onChangeText={setStockQuantity}
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.halfColumn}>
-                <Text style={styles.inputLabel}>Disponible para Venta</Text>
-                <View style={styles.switchContainer}>
-                  <Switch
-                    trackColor={{ false: "#dadada", true: "#a970e1" }}
-                    thumbColor={isAvailable ? "#6c08dd" : "#f4f3f4"}
-                    ios_backgroundColor="#dadada"
-                    onValueChange={setIsAvailable}
-                    value={isAvailable}
-                  />
-                </View>
-              </View>
+            {/* Price */}
+            <Text style={styles.inputLabel}>Precio (CLP)</Text>
+            <View style={styles.priceInputContainer}>
+              <Text style={styles.currencySymbol}>$</Text>
+              <TextInput
+                style={styles.priceInput}
+                placeholder="0.00"
+                value={price}
+                onChangeText={handlePriceChange}
+                keyboardType="numeric"
+                editable={isForSale}
+              />
             </View>
-
-            {/* Condition and Language */}
-            <View style={styles.rowContainer}>
-              <View style={styles.halfColumn}>
-                <Text style={styles.inputLabel}>Condición</Text>
-                <TouchableOpacity style={styles.dropdownButton} onPress={() => toggleDropdown("condition")}>
-                  <Text style={styles.dropdownButtonText}>{condition}</Text>
-                  <Feather name="chevron-down" size={16} color="#666" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.halfColumn}>
-                <Text style={styles.inputLabel}>Idioma</Text>
-                <TouchableOpacity style={styles.dropdownButton} onPress={() => toggleDropdown("language")}>
-                  <Text style={styles.dropdownButtonText}>{language}</Text>
-                  <Feather name="chevron-down" size={16} color="#666" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Images */}
-            <Text style={styles.sectionTitle}>Imágenes</Text>
 
             {/* Image Upload */}
-            <Text style={styles.inputLabel}>Imagen Principal</Text>
+            <Text style={styles.inputLabel}>Imagen del artículo</Text>
             <TouchableOpacity style={styles.imagePickerContainer} onPress={showImageOptions}>
               {imageUri ? (
-                <Image source={{ uri: imageUri }} style={styles.selectedImage} />
+                <View style={styles.imageContainer}>
+                  <Image source={{ uri: imageUri }} style={styles.selectedImage} />
+                  <TouchableOpacity style={styles.removeImageButton} onPress={removeImage}>
+                    <Feather name="x" size={20} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               ) : (
                 <View style={styles.imagePlaceholder}>
                   <Feather name="image" size={24} color="#666" />
@@ -580,158 +477,65 @@ export default function AddProductScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Image URLs */}
-            <Text style={styles.inputLabel}>URL Imagen Pequeña</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="https://..."
-              value={imageUrlSmall}
-              onChangeText={setImageUrlSmall}
-            />
-
-            <Text style={styles.inputLabel}>URL Imagen Grande</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="https://..."
-              value={imageUrlLarge}
-              onChangeText={setImageUrlLarge}
-            />
-
-            {/* Notes */}
-            <Text style={styles.inputLabel}>Notas Adicionales</Text>
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              placeholder="Notas internas sobre el producto..."
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={3}
-              maxLength={500}
-            />
-
-            {/* Create Button */}
+            {/* Publish Button */}
             <TouchableOpacity
-              style={[styles.publishButton, (!name.trim() || !price || loading) && styles.publishButtonDisabled]}
-              onPress={createProduct}
-              disabled={!name.trim() || !price || loading}
+              style={[
+                styles.publishButton,
+                (!itemName.trim() || isLoading || !currentUser) && styles.publishButtonDisabled,
+              ]}
+              onPress={publishItem}
+              disabled={!itemName.trim() || isLoading || !currentUser}
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.publishButtonText}>Crear Producto</Text>
-              )}
+              <Text style={styles.publishButtonText}>{isLoading ? "Creando..." : "Publicar Artículo"}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Modals for dropdowns */}
-      {/* Product Type Modal */}
+      {/* Image Picker Modal */}
       <Modal
-        visible={activeDropdown === "productType"}
+        visible={showImagePickerModal}
         transparent={true}
-        animationType="fade"
-        onRequestClose={() => setActiveDropdown(null)}
+        animationType="slide"
+        onRequestClose={() => setShowImagePickerModal(false)}
       >
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setActiveDropdown(null)}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Tipo de Producto</Text>
-                <TouchableOpacity onPress={() => setActiveDropdown(null)}>
-                  <Feather name="x" size={24} color="#333" />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.modalScrollView}>
-                {PRODUCT_TYPES.map((type) => (
-                  <TouchableOpacity
-                    key={type.value}
-                    style={[styles.modalOption, productType === type.value && styles.selectedModalOption]}
-                    onPress={() => {
-                      setProductType(type.value)
-                      setActiveDropdown(null)
-                    }}
-                  >
-                    <Text style={styles.modalOptionText}>{type.label}</Text>
-                    {productType === type.value && <Feather name="check" size={18} color="#6c08dd" />}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+        <View style={styles.imagePickerModalOverlay}>
+          <View style={styles.imagePickerModalContainer}>
+            <View style={styles.imagePickerModalHeader}>
+              <Text style={styles.imagePickerModalTitle}>Seleccionar imagen</Text>
+              <TouchableOpacity onPress={() => setShowImagePickerModal(false)}>
+                <Feather name="x" size={24} color="#333" />
+              </TouchableOpacity>
             </View>
+
+            <View style={styles.imagePickerOptions}>
+              <TouchableOpacity style={styles.imagePickerOption} onPress={takePhotoWithCamera}>
+                <View style={styles.imagePickerOptionIcon}>
+                  <Feather name="camera" size={32} color="#6c08dd" />
+                </View>
+                <Text style={styles.imagePickerOptionTitle}>Tomar foto</Text>
+                <Text style={styles.imagePickerOptionDescription}>Usa la cámara para tomar una nueva foto</Text>
+              </TouchableOpacity>
+
+              <View style={styles.imagePickerDivider} />
+
+              <TouchableOpacity style={styles.imagePickerOption} onPress={pickImageFromLibrary}>
+                <View style={styles.imagePickerOptionIcon}>
+                  <Feather name="folder" size={32} color="#6c08dd" />
+                </View>
+                <Text style={styles.imagePickerOptionTitle}>Elegir de galería</Text>
+                <Text style={styles.imagePickerOptionDescription}>Selecciona una imagen de tu galería</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.imagePickerCancelButton} onPress={() => setShowImagePickerModal(false)}>
+              <Text style={styles.imagePickerCancelText}>Cancelar</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
-      {/* Supertype Modal */}
-      <Modal
-        visible={activeDropdown === "supertype"}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setActiveDropdown(null)}
-      >
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setActiveDropdown(null)}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Supertipo</Text>
-                <TouchableOpacity onPress={() => setActiveDropdown(null)}>
-                  <Feather name="x" size={24} color="#333" />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.modalScrollView}>
-                {SUPERTYPES.map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[styles.modalOption, supertype === type && styles.selectedModalOption]}
-                    onPress={() => {
-                      setSupertype(type)
-                      setActiveDropdown(null)
-                    }}
-                  >
-                    <Text style={styles.modalOptionText}>{type}</Text>
-                    {supertype === type && <Feather name="check" size={18} color="#6c08dd" />}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Types Modal (Multi-select) */}
-      <Modal
-        visible={activeDropdown === "types"}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setActiveDropdown(null)}
-      >
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setActiveDropdown(null)}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Tipos de Pokémon</Text>
-                <TouchableOpacity onPress={() => setActiveDropdown(null)}>
-                  <Feather name="x" size={24} color="#333" />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.modalScrollView}>
-                {POKEMON_TYPES.map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[styles.modalOption, types.includes(type) && styles.selectedModalOption]}
-                    onPress={() => toggleArrayValue(types, type, setTypes)}
-                  >
-                    <Text style={styles.modalOptionText}>{type}</Text>
-                    {types.includes(type) && <Feather name="check" size={18} color="#6c08dd" />}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Rarity Modal */}
+      {/* Rarity Dropdown Modal */}
       <Modal
         visible={activeDropdown === "rarity"}
         transparent={true}
@@ -742,23 +546,23 @@ export default function AddProductScreen() {
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Rareza</Text>
+                <Text style={styles.modalTitle}>Seleccionar Rareza</Text>
                 <TouchableOpacity onPress={() => setActiveDropdown(null)}>
                   <Feather name="x" size={24} color="#333" />
                 </TouchableOpacity>
               </View>
               <ScrollView style={styles.modalScrollView}>
-                {RARITIES.map((rarityOption) => (
+                {RARITIES.map((rarity) => (
                   <TouchableOpacity
-                    key={rarityOption}
-                    style={[styles.modalOption, rarity === rarityOption && styles.selectedModalOption]}
+                    key={rarity}
+                    style={[styles.modalOption, selectedRarity === rarity && styles.selectedModalOption]}
                     onPress={() => {
-                      setRarity(rarityOption)
+                      setSelectedRarity(rarity)
                       setActiveDropdown(null)
                     }}
                   >
-                    <Text style={styles.modalOptionText}>{rarityOption}</Text>
-                    {rarity === rarityOption && <Feather name="check" size={18} color="#6c08dd" />}
+                    <Text style={styles.modalOptionText}>{rarity}</Text>
+                    {selectedRarity === rarity && <Feather name="check" size={18} color="#6c08dd" />}
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -767,7 +571,7 @@ export default function AddProductScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Condition Modal */}
+      {/* Condition Dropdown Modal */}
       <Modal
         visible={activeDropdown === "condition"}
         transparent={true}
@@ -778,59 +582,23 @@ export default function AddProductScreen() {
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Condición</Text>
+                <Text style={styles.modalTitle}>Seleccionar Estado</Text>
                 <TouchableOpacity onPress={() => setActiveDropdown(null)}>
                   <Feather name="x" size={24} color="#333" />
                 </TouchableOpacity>
               </View>
               <ScrollView style={styles.modalScrollView}>
-                {CARD_CONDITIONS.map((conditionOption) => (
+                {CARD_CONDITIONS.map((condition) => (
                   <TouchableOpacity
-                    key={conditionOption}
-                    style={[styles.modalOption, condition === conditionOption && styles.selectedModalOption]}
+                    key={condition}
+                    style={[styles.modalOption, selectedCondition === condition && styles.selectedModalOption]}
                     onPress={() => {
-                      setCondition(conditionOption)
+                      setSelectedCondition(condition)
                       setActiveDropdown(null)
                     }}
                   >
-                    <Text style={styles.modalOptionText}>{conditionOption}</Text>
-                    {condition === conditionOption && <Feather name="check" size={18} color="#6c08dd" />}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Language Modal */}
-      <Modal
-        visible={activeDropdown === "language"}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setActiveDropdown(null)}
-      >
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setActiveDropdown(null)}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Idioma</Text>
-                <TouchableOpacity onPress={() => setActiveDropdown(null)}>
-                  <Feather name="x" size={24} color="#333" />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.modalScrollView}>
-                {LANGUAGES.map((lang) => (
-                  <TouchableOpacity
-                    key={lang}
-                    style={[styles.modalOption, language === lang && styles.selectedModalOption]}
-                    onPress={() => {
-                      setLanguage(lang)
-                      setActiveDropdown(null)
-                    }}
-                  >
-                    <Text style={styles.modalOptionText}>{lang}</Text>
-                    {language === lang && <Feather name="check" size={18} color="#6c08dd" />}
+                    <Text style={styles.modalOptionText}>{condition}</Text>
+                    {selectedCondition === condition && <Feather name="check" size={18} color="#6c08dd" />}
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -876,12 +644,16 @@ const styles = StyleSheet.create({
   formContainer: {
     padding: 16,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 24,
-    marginBottom: 8,
-    color: "#333",
+  userInfoContainer: {
+    backgroundColor: "#e8f5e8",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  userInfoText: {
+    fontSize: 14,
+    color: "#2d5a2d",
+    fontWeight: "500",
   },
   inputLabel: {
     fontSize: 16,
@@ -898,16 +670,63 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
   },
-  textArea: {
-    height: 80,
-    textAlignVertical: "top",
+  readOnlyInput: {
+    backgroundColor: "#f5f5f5",
+    color: "#666",
   },
-  rowContainer: {
+  autocompleteContainer: {
+    position: "relative",
+    zIndex: 1000,
+  },
+  autocompleteDropdown: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#dadada",
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    maxHeight: 200,
+    zIndex: 1000,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  autocompleteList: {
+    maxHeight: 200,
+  },
+  autocompleteItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  autocompleteItemContent: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: "center",
   },
-  halfColumn: {
-    width: "48%",
+  autocompleteItemImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    marginRight: 12,
+  },
+  autocompleteItemText: {
+    flex: 1,
+  },
+  autocompleteItemName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+  },
+  autocompleteItemDetails: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 2,
   },
   dropdownButton: {
     flexDirection: "row",
@@ -922,11 +741,12 @@ const styles = StyleSheet.create({
   dropdownButtonText: {
     fontSize: 16,
     color: "#333",
-    flex: 1,
   },
-  switchContainer: {
+  toggleContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginTop: 16,
-    alignItems: "flex-start",
   },
   priceInputContainer: {
     flexDirection: "row",
@@ -958,6 +778,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     overflow: "hidden",
   },
+  imageContainer: {
+    position: "relative",
+    width: "100%",
+    height: "100%",
+  },
   imagePlaceholder: {
     alignItems: "center",
     justifyContent: "center",
@@ -973,6 +798,17 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     resizeMode: "cover",
+  },
+  removeImageButton: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: "center",
+    alignItems: "center",
   },
   publishButton: {
     backgroundColor: "#6c08dd",
@@ -991,7 +827,78 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-  // Modal styles
+  // Image Picker Modal Styles
+  imagePickerModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  imagePickerModalContainer: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: Platform.OS === "ios" ? 34 : 20,
+  },
+  imagePickerModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  imagePickerModalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  imagePickerOptions: {
+    padding: 20,
+  },
+  imagePickerOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+  },
+  imagePickerOptionIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#f8f4ff",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  imagePickerOptionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 4,
+    flex: 1,
+  },
+  imagePickerOptionDescription: {
+    fontSize: 14,
+    color: "#666",
+    flex: 1,
+  },
+  imagePickerDivider: {
+    height: 1,
+    backgroundColor: "#f0f0f0",
+    marginVertical: 8,
+  },
+  imagePickerCancelButton: {
+    marginHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: "#f5f5f5",
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  imagePickerCancelText: {
+    fontSize: 16,
+    color: "#666",
+    fontWeight: "500",
+  },
+  // Regular Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",

@@ -4,103 +4,197 @@ import { router } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { useEffect, useState } from "react"
 import {
-    Image,
-    Modal,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Image,
+  Modal,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native"
-
-// Sample inventory data
-const INVENTORY_ITEMS = [
-  {
-    id: "item1",
-    name: "Prismatic Evolutions Booster",
-    brand: "Pokemon TCG",
-    price: "5.000CLP",
-    imageUri: "https://images.pokemontcg.io/sv4pt5/1.png",
-  },
-  {
-    id: "item2",
-    name: "Charizard ex",
-    brand: "Pokemon TCG",
-    price: "15.000CLP",
-    imageUri: "https://images.pokemontcg.io/sv4pt5/6.png",
-  },
-  {
-    id: "item3",
-    name: "Pikachu VMAX",
-    brand: "Pokemon TCG",
-    price: "8.000CLP",
-    imageUri: "https://images.pokemontcg.io/swsh4/188.png",
-  },
-  {
-    id: "item4",
-    name: "Eevee",
-    brand: "Pokemon TCG",
-    price: "12.000CLP",
-    imageUri: "https://images.pokemontcg.io/sv4pt5/9.png",
-  },
-  {
-    id: "item5",
-    name: "Rayquaza ex",
-    brand: "Pokemon TCG",
-    price: "4.500CLP",
-    imageUri: "https://images.pokemontcg.io/swsh5/110.png",
-  },
-  {
-    id: "item6",
-    name: "Umbreon VMAX",
-    brand: "Pokemon TCG",
-    price: "20.000CLP",
-    imageUri: "https://images.pokemontcg.io/swsh7/215.png",
-  },
-  {
-    id: "item7",
-    name: "Sylveon ex",
-    brand: "Pokemon TCG",
-    price: "6.000CLP",
-    imageUri: "https://images.pokemontcg.io/sv4pt5/26.png",
-  },
-  {
-    id: "item8",
-    name: "Mew ex",
-    brand: "Pokemon TCG",
-    price: "3.000CLP",
-    imageUri: "https://images.pokemontcg.io/swsh8/151.png",
-  },
-]
+import { useUserStore, type Product } from "../../store/userStore"
 
 // Filter options
-type SortOption = "name_asc" | "name_desc" | "price_asc" | "price_desc" | "brand_asc"
+type SortOption = "name_asc" | "name_desc" | "price_asc" | "price_desc" | "condition_asc" | "rarity_asc"
 type PriceRange = "all" | "0-5000" | "5000-10000" | "10000-20000" | "20000+"
 
 interface FilterState {
   sortBy: SortOption
   priceRange: PriceRange
-  selectedBrands: string[]
+  selectedConditions: string[]
+  selectedRarities: string[]
+  availableOnly: boolean
 }
 
 export default function InventoryScreen() {
-  const [inventory, setInventory] = useState(INVENTORY_ITEMS)
+  const {
+    inventory,
+    inventoryLoading,
+    inventoryError,
+    currentUser,
+    loadUserInventory,
+    removeProductFromInventory,
+    getInventoryStats,
+  } = useUserStore()
+
   const [searchQuery, setSearchQuery] = useState("")
-  const [filteredItems, setFilteredItems] = useState(inventory)
+  const [filteredItems, setFilteredItems] = useState<Product[]>([])
   const [showFilterModal, setShowFilterModal] = useState(false)
-  const [totalPrice, setTotalPrice] = useState("100.000CLP")
+  const [refreshing, setRefreshing] = useState(false)
 
   // Filter state
   const [filters, setFilters] = useState<FilterState>({
     sortBy: "name_asc",
     priceRange: "all",
-    selectedBrands: [],
+    selectedConditions: [],
+    selectedRarities: [],
+    availableOnly: false,
   })
 
-  // Available brands
-  const availableBrands = ["Pokemon TCG", "Digimon TCG", "One Piece TCG", "Magic: The Gathering"]
+  // Get unique values for filters
+  const getUniqueConditions = () => {
+    const conditions = inventory
+      .map((item) => item.condition)
+      .filter((condition): condition is string => Boolean(condition))
+    return [...new Set(conditions)]
+  }
+
+  const getUniqueRarities = () => {
+    const rarities = inventory.map((item) => item.rarity).filter((rarity): rarity is string => Boolean(rarity))
+    return [...new Set(rarities)]
+  }
+
+  // Load inventory on component mount
+  useEffect(() => {
+    if (currentUser && !inventoryLoading) {
+      loadUserInventory()
+    }
+  }, [currentUser]) // Remove loadUserInventory from dependencies
+
+  // Pull to refresh - remove the useCallback wrapper
+  const onRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await loadUserInventory()
+    } catch (error) {
+      console.error("Error refreshing inventory:", error)
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  // Get inventory stats
+  const inventoryStats = getInventoryStats()
+
+  // Format price for display
+  const formatPrice = (price: number) => {
+    return `${price.toLocaleString("es-CL")} CLP`
+  }
+
+  // Get image URI with fallback
+  const getImageUri = (item: Product) => {
+    return (
+      item.images?.large || item.images?.small || item.images?.symbol || "https://images.pokemontcg.io/sv4pt5/1.png" // Fallback image
+    )
+  }
+
+  // Auto-load inventory even without currentUser for now
+  useEffect(() => {
+    if (!currentUser && !inventoryLoading) {
+      loadUserInventory()
+    }
+  }, [currentUser, inventoryLoading, loadUserInventory])
+
+  // Remove item from inventory - SIMPLIFIED FOR TESTING
+  const removeItem = (productId: string) => {
+    console.log(`🔴 REMOVE ITEM CALLED: ${productId}`)
+
+    // Simple alert first to test if function is called
+    Alert.alert("Test", `Trying to delete product: ${productId}`, [
+      { text: "Cancel" },
+      {
+        text: "Delete",
+        onPress: () => {
+          console.log(`🗑️ DELETE CONFIRMED: ${productId}`)
+          // Call the actual delete function
+          handleDelete(productId)
+        },
+      },
+    ])
+  }
+
+  // Separate function for the actual delete
+  const handleDelete = async (productId: string) => {
+    try {
+      console.log(`🚀 STARTING DELETE: ${productId}`)
+      await removeProductFromInventory(productId)
+      console.log(`✅ DELETE SUCCESS: ${productId}`)
+      Alert.alert("Success", "Item deleted")
+    } catch (error) {
+      console.log(`❌ DELETE ERROR: ${error}`)
+      Alert.alert("Error", `Failed to delete: ${error?.message}`)
+    }
+  }
+
+  // Calculate total price
+  const calculateTotalPrice = () => {
+    const total = filteredItems.reduce((sum, item) => sum + item.price, 0)
+    return total.toLocaleString("es-CL")
+  }
+
+  // Navigate to add item screen
+  const navigateToAddItem = () => {
+    router.push("/add-card")
+  }
+
+  // Update filter state
+  const updateFilters = (newFilters: Partial<FilterState>) => {
+    setFilters((prev) => ({ ...prev, ...newFilters }))
+  }
+
+  // Toggle condition in filters
+  const toggleConditionFilter = (condition: string) => {
+    const currentConditions = filters.selectedConditions
+    if (currentConditions.includes(condition)) {
+      updateFilters({
+        selectedConditions: currentConditions.filter((c) => c !== condition),
+      })
+    } else {
+      updateFilters({
+        selectedConditions: [...currentConditions, condition],
+      })
+    }
+  }
+
+  // Toggle rarity in filters
+  const toggleRarityFilter = (rarity: string) => {
+    const currentRarities = filters.selectedRarities
+    if (currentRarities.includes(rarity)) {
+      updateFilters({
+        selectedRarities: currentRarities.filter((r) => r !== rarity),
+      })
+    } else {
+      updateFilters({
+        selectedRarities: [...currentRarities, rarity],
+      })
+    }
+  }
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setFilters({
+      sortBy: "name_asc",
+      priceRange: "all",
+      selectedConditions: [],
+      selectedRarities: [],
+      availableOnly: false,
+    })
+    setSearchQuery("")
+  }
 
   // Apply all filters
   useEffect(() => {
@@ -110,19 +204,34 @@ export default function InventoryScreen() {
     if (searchQuery.trim() !== "") {
       const query = searchQuery.toLowerCase().trim()
       filtered = filtered.filter(
-        (item) => item.name.toLowerCase().includes(query) || item.brand.toLowerCase().includes(query),
+        (item) =>
+          item.name.toLowerCase().includes(query) ||
+          item.product_type.toLowerCase().includes(query) ||
+          item.set?.name?.toLowerCase().includes(query) ||
+          item.rarity?.toLowerCase().includes(query) ||
+          item.condition?.toLowerCase().includes(query),
       )
     }
 
-    // Apply brand filters
-    if (filters.selectedBrands.length > 0) {
-      filtered = filtered.filter((item) => filters.selectedBrands.includes(item.brand))
+    // Apply condition filters
+    if (filters.selectedConditions.length > 0) {
+      filtered = filtered.filter((item) => item.condition && filters.selectedConditions.includes(item.condition))
+    }
+
+    // Apply rarity filters
+    if (filters.selectedRarities.length > 0) {
+      filtered = filtered.filter((item) => item.rarity && filters.selectedRarities.includes(item.rarity))
+    }
+
+    // Apply availability filter
+    if (filters.availableOnly) {
+      filtered = filtered.filter((item) => item.is_available === true)
     }
 
     // Apply price range filter
     if (filters.priceRange !== "all") {
       filtered = filtered.filter((item) => {
-        const price = Number.parseFloat(item.price.replace("CLP", "").replace(".", "").replace(",", "."))
+        const price = item.price
         switch (filters.priceRange) {
           case "0-5000":
             return price <= 5000
@@ -145,7 +254,7 @@ export default function InventoryScreen() {
   }, [searchQuery, inventory, filters])
 
   // Sort items based on selected option
-  const sortItems = (itemList: typeof inventory, option: SortOption) => {
+  const sortItems = (itemList: Product[], option: SortOption) => {
     const sorted = [...itemList]
 
     switch (option) {
@@ -154,76 +263,16 @@ export default function InventoryScreen() {
       case "name_desc":
         return sorted.sort((a, b) => b.name.localeCompare(a.name))
       case "price_asc":
-        return sorted.sort((a, b) => {
-          const priceA = Number.parseFloat(a.price.replace("CLP", "").replace(".", "").replace(",", "."))
-          const priceB = Number.parseFloat(b.price.replace("CLP", "").replace(".", "").replace(",", "."))
-          return priceA - priceB
-        })
+        return sorted.sort((a, b) => a.price - b.price)
       case "price_desc":
-        return sorted.sort((a, b) => {
-          const priceA = Number.parseFloat(a.price.replace("CLP", "").replace(".", "").replace(",", "."))
-          const priceB = Number.parseFloat(b.price.replace("CLP", "").replace(".", "").replace(",", "."))
-          return priceB - priceA
-        })
-      case "brand_asc":
-        return sorted.sort((a, b) => a.brand.localeCompare(b.brand))
+        return sorted.sort((a, b) => b.price - a.price)
+      case "condition_asc":
+        return sorted.sort((a, b) => (a.condition || "").localeCompare(b.condition || ""))
+      case "rarity_asc":
+        return sorted.sort((a, b) => (a.rarity || "").localeCompare(b.rarity || ""))
       default:
         return sorted
     }
-  }
-
-  // Remove item from inventory
-  const removeItem = (itemId: string) => {
-    const updatedInventory = inventory.filter((item) => item.id !== itemId)
-    setInventory(updatedInventory)
-
-    // Recalculate total price
-    const newTotalPrice = calculateTotalPrice(updatedInventory)
-    setTotalPrice(newTotalPrice)
-  }
-
-  // Calculate total price
-  const calculateTotalPrice = (items: typeof inventory) => {
-    const total = items.reduce((sum, item) => {
-      const price = Number.parseFloat(item.price.replace("CLP", "").replace(".", "").replace(",", "."))
-      return sum + price
-    }, 0)
-
-    return `${total.toLocaleString("es-CL")}CLP`
-  }
-
-  // Navigate to add item screen
-  const navigateToAddItem = () => {
-    router.push("/add-card")
-  }
-
-  // Update filter state
-  const updateFilters = (newFilters: Partial<FilterState>) => {
-    setFilters((prev) => ({ ...prev, ...newFilters }))
-  }
-
-  // Toggle brand in filters
-  const toggleBrandFilter = (brand: string) => {
-    const currentBrands = filters.selectedBrands
-    if (currentBrands.includes(brand)) {
-      updateFilters({
-        selectedBrands: currentBrands.filter((b) => b !== brand),
-      })
-    } else {
-      updateFilters({
-        selectedBrands: [...currentBrands, brand],
-      })
-    }
-  }
-
-  // Clear all filters
-  const clearAllFilters = () => {
-    setFilters({
-      sortBy: "name_asc",
-      priceRange: "all",
-      selectedBrands: [],
-    })
-    setSearchQuery("")
   }
 
   return (
@@ -258,72 +307,140 @@ export default function InventoryScreen() {
         />
       </View>
 
-      {/* Total Price */}
-      <View style={styles.totalPriceContainer}>
-        <Text style={styles.totalPriceText}>Precio Total: {totalPrice}</Text>
+      {/* Stats Container - show even without currentUser */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{inventoryStats.totalProducts}</Text>
+          <Text style={styles.statLabel}>Artículos</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{inventoryStats.forSale}</Text>
+          <Text style={styles.statLabel}>En venta</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{formatPrice(inventoryStats.totalValue)}</Text>
+          <Text style={styles.statLabel}>Valor total</Text>
+        </View>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Active Filters Display */}
-        {(filters.priceRange !== "all" || filters.selectedBrands.length > 0 || filters.sortBy !== "name_asc") && (
-          <View style={styles.activeFiltersContainer}>
-            <Text style={styles.activeFiltersTitle}>Filtros activos:</Text>
-            <View style={styles.activeFiltersRow}>
-              {filters.priceRange !== "all" && (
-                <View style={styles.activeFilterChip}>
-                  <Text style={styles.activeFilterText}>Precio: {filters.priceRange}</Text>
-                </View>
-              )}
-              {filters.selectedBrands.map((brand) => (
-                <View key={brand} style={styles.activeFilterChip}>
-                  <Text style={styles.activeFilterText}>{brand}</Text>
-                </View>
-              ))}
-              {filters.sortBy !== "name_asc" && (
-                <View style={styles.activeFilterChip}>
-                  <Text style={styles.activeFilterText}>Ordenado por: {filters.sortBy}</Text>
-                </View>
-              )}
-              <TouchableOpacity style={styles.clearFiltersButton} onPress={clearAllFilters}>
-                <Text style={styles.clearFiltersText}>Limpiar</Text>
-              </TouchableOpacity>
-            </View>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Loading State */}
+        {inventoryLoading && (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Cargando inventario...</Text>
           </View>
         )}
 
-        {/* Items Grid */}
-        <View style={styles.itemsGrid}>
-          {filteredItems.map((item) => (
-            <View key={item.id} style={styles.itemContainer}>
-              <TouchableOpacity style={styles.removeButton} onPress={() => removeItem(item.id)}>
-                <Feather name="x" size={16} color="white" />
-              </TouchableOpacity>
-              <Image source={{ uri: item.imageUri }} style={styles.itemImage} />
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemName} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <Text style={styles.itemBrand}>{item.brand}</Text>
-                <Text style={styles.itemPrice}>{item.price}</Text>
+        {/* Error State */}
+        {inventoryError && (
+          <View style={styles.errorContainer}>
+            <Feather name="alert-circle" size={48} color="#ff4444" />
+            <Text style={styles.errorText}>Error al cargar inventario</Text>
+            <Text style={styles.errorSubtext}>{inventoryError}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadUserInventory}>
+              <Text style={styles.retryButtonText}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Active Filters Display */}
+        {!inventoryLoading &&
+          (filters.priceRange !== "all" ||
+            filters.selectedConditions.length > 0 ||
+            filters.selectedRarities.length > 0 ||
+            filters.availableOnly ||
+            filters.sortBy !== "name_asc") && (
+            <View style={styles.activeFiltersContainer}>
+              <Text style={styles.activeFiltersTitle}>Filtros activos:</Text>
+              <View style={styles.activeFiltersRow}>
+                {filters.priceRange !== "all" && (
+                  <View style={styles.activeFilterChip}>
+                    <Text style={styles.activeFilterText}>Precio: {filters.priceRange}</Text>
+                  </View>
+                )}
+                {filters.selectedConditions.map((condition) => (
+                  <View key={condition} style={styles.activeFilterChip}>
+                    <Text style={styles.activeFilterText}>{condition}</Text>
+                  </View>
+                ))}
+                {filters.selectedRarities.map((rarity) => (
+                  <View key={rarity} style={styles.activeFilterChip}>
+                    <Text style={styles.activeFilterText}>{rarity}</Text>
+                  </View>
+                ))}
+                {filters.availableOnly && (
+                  <View style={styles.activeFilterChip}>
+                    <Text style={styles.activeFilterText}>Solo disponibles</Text>
+                  </View>
+                )}
+                {filters.sortBy !== "name_asc" && (
+                  <View style={styles.activeFilterChip}>
+                    <Text style={styles.activeFilterText}>Ordenado</Text>
+                  </View>
+                )}
+                <TouchableOpacity style={styles.clearFiltersButton} onPress={clearAllFilters}>
+                  <Text style={styles.clearFiltersText}>Limpiar</Text>
+                </TouchableOpacity>
               </View>
             </View>
-          ))}
-        </View>
+          )}
 
-        {filteredItems.length === 0 && (
+        {/* Items Grid */}
+        {!inventoryLoading && !inventoryError && (
+          <View style={styles.itemsGrid}>
+            {filteredItems.map((item) => (
+              <View key={item._id} style={styles.itemContainer}>
+                <Image source={{ uri: getImageUri(item) }} style={styles.itemImage} />
+                <TouchableOpacity
+                  style={styles.removeButton}
+                  onPress={() => {
+                    console.log(`🔴 BUTTON TOUCHED: ${item._id}`)
+                    removeItem(item._id)
+                  }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                >
+                  <Feather name="x" size={16} color="white" />
+                </TouchableOpacity>
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemName} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.itemBrand}>{item.set?.name || item.product_type}</Text>
+                  <Text style={styles.itemCondition}>{item.condition}</Text>
+                  <Text style={styles.itemPrice}>{formatPrice(item.price)}</Text>
+                  {item.is_available && <View style={styles.availableBadge} />}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* No Results */}
+        {!inventoryLoading && !inventoryError && filteredItems.length === 0 && (
           <View style={styles.noResultsContainer}>
             <Feather name="package" size={48} color="#ccc" />
             <Text style={styles.noResultsText}>No se encontraron artículos</Text>
             <Text style={styles.noResultsSubtext}>
-              {searchQuery || filters.priceRange !== "all" || filters.selectedBrands.length > 0
+              {searchQuery ||
+              filters.priceRange !== "all" ||
+              filters.selectedConditions.length > 0 ||
+              filters.selectedRarities.length > 0
                 ? "Intenta ajustar tus filtros de búsqueda"
                 : "Añade artículos a tu inventario"}
             </Text>
-            {!searchQuery && filters.priceRange === "all" && filters.selectedBrands.length === 0 && (
-              <TouchableOpacity style={styles.addItemButton} onPress={navigateToAddItem}>
-                <Text style={styles.addItemButtonText}>Añadir Artículo</Text>
-              </TouchableOpacity>
-            )}
+            {!searchQuery &&
+              filters.priceRange === "all" &&
+              filters.selectedConditions.length === 0 &&
+              filters.selectedRarities.length === 0 && (
+                <TouchableOpacity style={styles.addItemButton} onPress={navigateToAddItem}>
+                  <Text style={styles.addItemButtonText}>Añadir Artículo</Text>
+                </TouchableOpacity>
+              )}
           </View>
         )}
       </ScrollView>
@@ -354,7 +471,8 @@ export default function InventoryScreen() {
                     { key: "name_desc", label: "Nombre (Z-A)" },
                     { key: "price_asc", label: "Precio (menor a mayor)" },
                     { key: "price_desc", label: "Precio (mayor a menor)" },
-                    { key: "brand_asc", label: "Marca (A-Z)" },
+                    { key: "condition_asc", label: "Condición (A-Z)" },
+                    { key: "rarity_asc", label: "Rareza (A-Z)" },
                   ].map((option) => (
                     <TouchableOpacity
                       key={option.key}
@@ -388,38 +506,59 @@ export default function InventoryScreen() {
                   ))}
                 </View>
 
-                {/* Brand Selection */}
-                <View style={styles.filterSection}>
-                  <Text style={styles.filterSectionTitle}>Marcas</Text>
-                  {availableBrands.map((brand) => (
-                    <TouchableOpacity
-                      key={brand}
-                      style={[
-                        styles.filterOption,
-                        filters.selectedBrands.includes(brand) && styles.selectedFilterOption,
-                      ]}
-                      onPress={() => toggleBrandFilter(brand)}
-                    >
-                      <Text style={styles.filterOptionText}>{brand}</Text>
-                      {filters.selectedBrands.includes(brand) && <Feather name="check" size={18} color="#6c08dd" />}
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                {/* Condition Selection */}
+                {getUniqueConditions().length > 0 && (
+                  <View style={styles.filterSection}>
+                    <Text style={styles.filterSectionTitle}>Condición</Text>
+                    {getUniqueConditions().map((condition) => (
+                      <TouchableOpacity
+                        key={condition}
+                        style={[
+                          styles.filterOption,
+                          filters.selectedConditions.includes(condition) && styles.selectedFilterOption,
+                        ]}
+                        onPress={() => toggleConditionFilter(condition)}
+                      >
+                        <Text style={styles.filterOptionText}>{condition}</Text>
+                        {filters.selectedConditions.includes(condition) && (
+                          <Feather name="check" size={18} color="#6c08dd" />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
 
-                {/* Additional Options */}
+                {/* Rarity Selection */}
+                {getUniqueRarities().length > 0 && (
+                  <View style={styles.filterSection}>
+                    <Text style={styles.filterSectionTitle}>Rareza</Text>
+                    {getUniqueRarities().map((rarity) => (
+                      <TouchableOpacity
+                        key={rarity}
+                        style={[
+                          styles.filterOption,
+                          filters.selectedRarities.includes(rarity) && styles.selectedFilterOption,
+                        ]}
+                        onPress={() => toggleRarityFilter(rarity)}
+                      >
+                        <Text style={styles.filterOptionText}>{rarity}</Text>
+                        {filters.selectedRarities.includes(rarity) && (
+                          <Feather name="check" size={18} color="#6c08dd" />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Availability Filter */}
                 <View style={styles.filterSection}>
-                  <Text style={styles.filterSectionTitle}>Opciones adicionales</Text>
-                  <TouchableOpacity style={styles.filterOption}>
-                    <Feather name="download" size={20} color="#333" />
-                    <Text style={styles.filterOptionText}>Exportar inventario</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.filterOption}>
-                    <Feather name="bar-chart-2" size={20} color="#333" />
-                    <Text style={styles.filterOptionText}>Ver estadísticas</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.filterOption}>
-                    <Feather name="trash-2" size={20} color="#ff4444" />
-                    <Text style={[styles.filterOptionText, { color: "#ff4444" }]}>Vaciar inventario</Text>
+                  <Text style={styles.filterSectionTitle}>Disponibilidad</Text>
+                  <TouchableOpacity
+                    style={[styles.filterOption, filters.availableOnly && styles.selectedFilterOption]}
+                    onPress={() => updateFilters({ availableOnly: !filters.availableOnly })}
+                  >
+                    <Text style={styles.filterOptionText}>Solo artículos disponibles para venta</Text>
+                    {filters.availableOnly && <Feather name="check" size={18} color="#6c08dd" />}
                   </TouchableOpacity>
                 </View>
               </ScrollView>
@@ -487,17 +626,69 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 14,
   },
-  totalPriceContainer: {
-    alignItems: "center",
-    paddingVertical: 8,
+  statsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: 12,
+    backgroundColor: "#fff",
+    marginHorizontal: 15,
+    marginBottom: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#dadada",
   },
-  totalPriceText: {
-    fontSize: 16,
+  statItem: {
+    alignItems: "center",
+  },
+  statNumber: {
+    fontSize: 18,
     fontWeight: "bold",
-    color: "#333",
+    color: "#6c08dd",
+  },
+  statLabel: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 2,
   },
   scrollView: {
     flex: 1,
+  },
+  loadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#666",
+  },
+  errorContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 40,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#ff4444",
+    marginTop: 16,
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: "#999",
+    marginTop: 8,
+    textAlign: "center",
+  },
+  retryButton: {
+    backgroundColor: "#6c08dd",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginTop: 16,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
   },
   activeFiltersContainer: {
     paddingHorizontal: 15,
@@ -562,15 +753,20 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     position: "absolute",
-    top: 5,
-    right: 5,
-    zIndex: 10,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#6c08dd",
+    top: 8,
+    right: 8,
+    zIndex: 999,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#ff4444",
     justifyContent: "center",
     alignItems: "center",
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   itemImage: {
     width: "100%",
@@ -591,11 +787,25 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 2,
   },
+  itemCondition: {
+    fontSize: 11,
+    color: "#888",
+    marginTop: 1,
+  },
   itemPrice: {
     fontSize: 14,
     fontWeight: "bold",
     color: "#6c08dd",
     marginTop: 5,
+  },
+  availableBadge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#4CAF50",
   },
   noResultsContainer: {
     alignItems: "center",
@@ -713,49 +923,5 @@ const styles = StyleSheet.create({
   applyButtonText: {
     color: "#fff",
     fontWeight: "bold",
-  },
-  footer: {
-    backgroundColor: "#222323",
-    padding: 20,
-  },
-  socialIcons: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 15,
-  },
-  footerSocialIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#3F3F46",
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 5,
-  },
-  footerText: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    textAlign: "center",
-    marginVertical: 10,
-  },
-  footerLinks: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 15,
-  },
-  footerLink: {
-    color: "#BBC5CB",
-    fontSize: 10,
-  },
-  footerLinkDivider: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    marginHorizontal: 5,
-  },
-  footerPrivacyText: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    textAlign: "center",
-    marginTop: 15,
   },
 })

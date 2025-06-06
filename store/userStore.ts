@@ -1,6 +1,6 @@
 "use client"
 
-// Store completo para manejar el usuario y collections con todas las funcionalidades
+// Store completo para manejar el usuario, collections e inventory con todas las funcionalidades
 
 // Interfaces que coinciden con tu schema real
 export interface CollectionItem {
@@ -19,6 +19,59 @@ export interface Collection {
   createdAt?: string
 }
 
+// Interfaces para inventory
+export interface ProductImage {
+  small?: string
+  large?: string
+  symbol?: string
+  logo?: string
+}
+
+export interface Product {
+  _id: string
+  name: string
+  product_type: string
+  description?: string
+  tcg_id?: string
+  supertype?: string
+  subtypes?: string[]
+  hp?: string
+  types?: string[]
+  rarity?: string
+  set?: {
+    id: string
+    name: string
+    series?: string
+    printedTotal?: number
+    total?: number
+    releaseDate?: string
+    images?: ProductImage
+  }
+  number?: string
+  artist?: string
+  images?: ProductImage
+  stock_quantity: number
+  price: number
+  cost_price?: number
+  is_available?: boolean
+  condition?: string
+  language?: string
+  tags?: string[]
+  notes?: string
+  abilities?: {
+    name: string
+    text: string
+    type: string
+  }[]
+  attacks?: {
+    name: string
+    cost?: string[]
+    convertedEnergyCost?: number
+    damage?: string
+    text?: string
+  }[]
+}
+
 // Estado del store
 interface UserState {
   currentUser: {
@@ -28,8 +81,11 @@ interface UserState {
     email: string
   }
   collections: Collection[]
+  inventory: Product[]
   loading: boolean
   error: string | null
+  inventoryLoading: boolean
+  inventoryError: string | null
 }
 
 // Estado inicial con tu usuario real
@@ -41,8 +97,11 @@ const initialState: UserState = {
     email: "asdasd@gmail.com",
   },
   collections: [],
+  inventory: [],
   loading: false,
   error: null,
+  inventoryLoading: false,
+  inventoryError: null,
 }
 
 // URLs de imágenes predefinidas para las collections
@@ -110,6 +169,18 @@ class UserStore {
   getCollectionById(collectionId: string): Collection | undefined {
     return this.state.collections.find((c) => c._id === collectionId)
   }
+
+  // Obtener inventory
+  getInventory(): Product[] {
+    return [...this.state.inventory]
+  }
+
+  // Obtener un producto del inventory por ID
+  getInventoryProductById(productId: string): Product | undefined {
+    return this.state.inventory.find((p) => p._id === productId)
+  }
+
+  // ==================== COLLECTIONS METHODS ====================
 
   // Cargar las collections del usuario
   async loadUserCollections(): Promise<void> {
@@ -357,15 +428,199 @@ class UserStore {
     }
   }
 
-  // Actualizar estado de loading
+  // ==================== INVENTORY METHODS ====================
+
+  // Cargar el inventory del usuario
+  async loadUserInventory(): Promise<void> {
+    try {
+      this.setInventoryLoading(true)
+      this.setInventoryError(null)
+
+      const userId = this.getCurrentUserId()
+      console.log(`🎒 STORE: Cargando inventory para usuario: ${userId}`)
+
+      const url = `http://localhost:3000/users/${userId}/inventory`
+      console.log(`🌐 STORE: Inventory URL: ${url}`)
+
+      const response = await fetch(url)
+
+      console.log(`📡 STORE: Inventory response status: ${response.status}`)
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.error("❌ STORE: Error response:", errorData)
+        throw new Error(`Error ${response.status}: ${errorData}`)
+      }
+
+      const inventoryData = await response.json()
+      const inventory: Product[] = inventoryData.inventory || []
+
+      console.log(`📦 STORE: Inventory recibido:`, {
+        total: inventory.length,
+        products: inventory.map((p, index) => ({
+          index,
+          _id: p._id,
+          name: p.name,
+          product_type: p.product_type,
+          price: p.price,
+          condition: p.condition,
+        })),
+      })
+
+      // Actualizar el estado
+      this.state.inventory = inventory
+      console.log(`✅ STORE: Inventory actualizado con ${inventory.length} productos`)
+
+      this.notifyListeners()
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Error al cargar inventory"
+      this.setInventoryError(errorMsg)
+      console.error("❌ STORE: Error cargando inventory:", err)
+    } finally {
+      this.setInventoryLoading(false)
+    }
+  }
+
+  // Agregar producto al inventory
+  async addProductToInventory(productId: string): Promise<void> {
+    try {
+      console.log(`➕ STORE: Agregando producto ${productId} al inventory`)
+
+      const userId = this.getCurrentUserId()
+      const response = await fetch(`http://localhost:3000/users/${userId}/inventory/${productId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.error("❌ STORE: Error response:", errorData)
+        throw new Error(`Error ${response.status}: ${errorData}`)
+      }
+
+      console.log(`✅ STORE: Producto ${productId} agregado al inventory`)
+
+      // Recargar el inventory para obtener los datos actualizados
+      await this.loadUserInventory()
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Error al agregar producto al inventory"
+      this.setInventoryError(errorMsg)
+      console.error("❌ STORE: Error agregando producto al inventory:", err)
+      throw new Error(errorMsg)
+    }
+  }
+
+  // Remover producto del inventory
+  async removeProductFromInventory(productId: string): Promise<void> {
+    try {
+      console.log(`➖ STORE: Removiendo producto ${productId} del inventory`)
+
+      const userId = this.getCurrentUserId()
+      const url = `http://localhost:3000/users/${userId}/inventory/${productId}`
+
+      console.log(`🌐 STORE: DELETE URL: ${url}`)
+
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      console.log(`📡 STORE: DELETE response status: ${response.status}`)
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.error("❌ STORE: Error response:", errorData)
+        throw new Error(`Error ${response.status}: ${errorData}`)
+      }
+
+      console.log(`✅ STORE: Producto ${productId} removido del inventory`)
+
+      // Update the state locally by removing the product
+      this.state.inventory = this.state.inventory.filter((p) => p._id !== productId)
+      this.notifyListeners()
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Error al remover producto del inventory"
+      this.setInventoryError(errorMsg)
+      console.error("❌ STORE: Error removiendo producto del inventory:", err)
+      throw new Error(errorMsg)
+    }
+  }
+
+  // Verificar si un producto está en el inventory
+  isProductInInventory(productId: string): boolean {
+    return this.state.inventory.some((p) => p._id === productId)
+  }
+
+  // Obtener productos del inventory por tipo
+  getInventoryByType(productType: string): Product[] {
+    return this.state.inventory.filter((p) => p.product_type === productType)
+  }
+
+  // Obtener productos del inventory disponibles para venta
+  getInventoryForSale(): Product[] {
+    return this.state.inventory.filter((p) => p.is_available === true)
+  }
+
+  // Obtener estadísticas del inventory
+  getInventoryStats() {
+    const inventory = this.state.inventory
+    const totalProducts = inventory.length
+    const forSale = inventory.filter((p) => p.is_available).length
+    const totalValue = inventory.reduce((sum, p) => sum + p.price, 0)
+
+    const byType = inventory.reduce(
+      (acc, p) => {
+        acc[p.product_type] = (acc[p.product_type] || 0) + 1
+        return acc
+      },
+      {} as Record<string, number>,
+    )
+
+    const byCondition = inventory.reduce(
+      (acc, p) => {
+        const condition = p.condition || "Unknown"
+        acc[condition] = (acc[condition] || 0) + 1
+        return acc
+      },
+      {} as Record<string, number>,
+    )
+
+    return {
+      totalProducts,
+      forSale,
+      totalValue,
+      byType,
+      byCondition,
+    }
+  }
+
+  // ==================== STATE MANAGEMENT ====================
+
+  // Actualizar estado de loading para collections
   setLoading(loading: boolean): void {
     this.state.loading = loading
     this.notifyListeners()
   }
 
-  // Actualizar mensaje de error
+  // Actualizar mensaje de error para collections
   setError(error: string | null): void {
     this.state.error = error
+    this.notifyListeners()
+  }
+
+  // Actualizar estado de loading para inventory
+  setInventoryLoading(loading: boolean): void {
+    this.state.inventoryLoading = loading
+    this.notifyListeners()
+  }
+
+  // Actualizar mensaje de error para inventory
+  setInventoryError(error: string | null): void {
+    this.state.inventoryError = error
     this.notifyListeners()
   }
 
@@ -395,8 +650,19 @@ class UserStore {
         is_favorite: c.is_favorite,
         cards_length: c.cards?.length || 0,
       })),
+      inventoryCount: this.state.inventory.length,
+      inventory: this.state.inventory.map((p) => ({
+        _id: p._id,
+        name: p.name,
+        product_type: p.product_type,
+        price: p.price,
+        condition: p.condition,
+        is_available: p.is_available,
+      })),
       loading: this.state.loading,
       error: this.state.error,
+      inventoryLoading: this.state.inventoryLoading,
+      inventoryError: this.state.inventoryError,
     })
   }
 }
@@ -405,7 +671,7 @@ class UserStore {
 export const userStore = new UserStore()
 
 // Hook para usar el store en React
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 
 export const useUserStore = () => {
   const [state, setState] = useState(userStore.getState())
@@ -419,7 +685,11 @@ export const useUserStore = () => {
   }, [])
 
   return {
+    // User data
     currentUser: state.currentUser,
+    getCurrentUserId: () => userStore.getCurrentUserId(),
+
+    // Collections
     collections: state.collections,
     loading: state.loading,
     error: state.error,
@@ -432,6 +702,21 @@ export const useUserStore = () => {
       userStore.removeCardFromCollection(collectionId, cardId),
     isCardInCollection: (collectionId: string, cardId: string) => userStore.isCardInCollection(collectionId, cardId),
     getCollectionById: (collectionId: string) => userStore.getCollectionById(collectionId),
+
+    // Inventory
+    inventory: state.inventory,
+    inventoryLoading: state.inventoryLoading,
+    inventoryError: state.inventoryError,
+    loadUserInventory: () => userStore.loadUserInventory(),
+    addProductToInventory: (productId: string) => userStore.addProductToInventory(productId),
+    removeProductFromInventory: (productId: string) => userStore.removeProductFromInventory(productId),
+    isProductInInventory: (productId: string) => userStore.isProductInInventory(productId),
+    getInventoryProductById: (productId: string) => userStore.getInventoryProductById(productId),
+    getInventoryByType: (productType: string) => userStore.getInventoryByType(productType),
+    getInventoryForSale: () => userStore.getInventoryForSale(),
+    getInventoryStats: () => userStore.getInventoryStats(),
+
+    // Debug
     debug: () => userStore.debug(),
   }
 }
