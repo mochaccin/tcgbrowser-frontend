@@ -3,7 +3,7 @@ import { Feather } from "@expo/vector-icons"
 import * as ImagePicker from "expo-image-picker"
 import { router } from "expo-router"
 import { StatusBar } from "expo-status-bar"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   ActivityIndicator,
   Image,
@@ -17,51 +17,30 @@ import {
   TouchableOpacity,
   View,
 } from "react-native"
-import CollectionToast from "../../components/CollectionToast"; // Import the CollectionToast component
+import CollectionToast from "../../components/CollectionToast"
+import { PREDEFINED_COLLECTION_IMAGES, useUserStore } from "../../store/userStore"
 
 export default function AddCollectionScreen() {
   const [collectionName, setCollectionName] = useState("")
   const [coverImage, setCoverImage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  
+
   // Toast state
   const [toastVisible, setToastVisible] = useState(false)
 
-  // Predefined images for selection
-  const predefinedImages = [
-    {
-      id: "1",
-      uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSdDXn-0lG1ym-zHe1EDJ5LF4pecZO3-wcoug&s",
-    },
-    {
-      id: "2",
-      uri: "https://external-preview.redd.it/try-not-to-get-scared-scariest-story-v0-YWR1anRyNjRjOThlMf4z2bnUq8P2iC1lfjLTEFdB7_ANdLqBbvP29enC4VT8.png?format=pjpg&auto=webp&s=dcef1c37221e4dd3b676ebded0f4647b90132975", // Brook from One Piece
-    },
-    {
-      id: "3",
-      uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRx-0Ms3nL3NKtHMc9eEJ6ILG1krpG32zIgAc_ivammtmdsmvnaBttxqCrdUW6icBLRvr0&usqp=CAU", // Person selfie
-    },
-    {
-      id: "4",
-      uri: "https://media3.giphy.com/media/xT1z8Fz2YP7Tcc5Nwa/giphy_s.gif?cid=6c09b952fd0cb3c7wjwkim49spwex1zlke17gmgj7ukrjb5j&ep=v1_gifs_search&rid=giphy_s.gif&ct=g", // Quagsire Pokemon
-    },
-    {
-      id: "5",
-      uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSdDXn-0lG1ym-zHe1EDJ5LF4pecZO3-wcoug&s", // Zoro from One Piece (repeated)
-    },
-    {
-      id: "6",
-      uri: "https://external-preview.redd.it/try-not-to-get-scared-scariest-story-v0-YWR1anRyNjRjOThlMf4z2bnUq8P2iC1lfjLTEFdB7_ANdLqBbvP29enC4VT8.png?format=pjpg&auto=webp&s=dcef1c37221e4dd3b676ebded0f4647b90132975", // Brook from One Piece (repeated)
-    },
-    {
-      id: "7",
-      uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRx-0Ms3nL3NKtHMc9eEJ6ILG1krpG32zIgAc_ivammtmdsmvnaBttxqCrdUW6icBLRvr0&usqp=CAU", // Person selfie (repeated)
-    },
-    {
-      id: "8",
-      uri: "https://media3.giphy.com/media/xT1z8Fz2YP7Tcc5Nwa/giphy_s.gif?cid=6c09b952fd0cb3c7wjwkim49spwex1zlke17gmgj7ukrjb5j&ep=v1_gifs_search&rid=giphy_s.gif&ct=g", // Quagsire Pokemon (repeated)
-    },
-  ]
+  // Hook para el store del usuario
+  const { currentUser, createCollection, loading, error, debug } = useUserStore()
+
+  // Debug info al cargar
+  useEffect(() => {
+    console.log("🔄 ADD_COLLECTION: Pantalla cargada")
+    console.log("👤 ADD_COLLECTION: Usuario actual:", {
+      _id: currentUser._id,
+      username: currentUser.username,
+      name: currentUser.name,
+    })
+    debug()
+  }, [])
 
   // Function to pick an image from the device
   const pickImage = async () => {
@@ -87,8 +66,8 @@ export default function AddCollectionScreen() {
     setCoverImage(imageUri)
   }
 
-  // Function to create the collection
-  const createCollection = async () => {
+  // Function to create the collection using real API
+  const handleCreateCollection = async () => {
     if (!collectionName.trim()) {
       alert("Por favor, ingresa un nombre para la colección")
       return
@@ -102,20 +81,33 @@ export default function AddCollectionScreen() {
     setIsLoading(true)
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      
+      console.log("🚀 ADD_COLLECTION: Iniciando creación de collection")
+      console.log("📝 ADD_COLLECTION: Datos:", {
+        name: collectionName.trim(),
+        img_url: coverImage,
+        createdBy: currentUser._id,
+        createdByType: typeof currentUser._id,
+      })
+
+      // Crear collection usando la API real a través del store
+      const newCollection = await createCollection(collectionName.trim(), coverImage)
+
+      console.log("✅ ADD_COLLECTION: Collection creada exitosamente:", {
+        _id: newCollection._id,
+        name: newCollection.name,
+        createdBy: newCollection.createdBy,
+      })
+
       // Show success toast
       setToastVisible(true)
-      
+
       // Navigate after a short delay to allow toast to be seen
       setTimeout(() => {
         router.push("/my-collections")
       }, 1500)
-      
     } catch (error) {
-      console.error("Error creating collection:", error)
-      alert("Error al crear la colección. Inténtalo de nuevo.")
+      console.error("❌ ADD_COLLECTION: Error creating collection:", error)
+      alert(`Error al crear la colección: ${error instanceof Error ? error.message : "Error desconocido"}`)
     } finally {
       setIsLoading(false)
     }
@@ -147,6 +139,13 @@ export default function AddCollectionScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardAvoidingView}>
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.formContainer}>
+            {/* Debug Info */}
+            <View style={styles.debugContainer}>
+              <Text style={styles.debugText}>Usuario: {currentUser._id}</Text>
+              <Text style={styles.debugText}>Username: {currentUser.username}</Text>
+              <Text style={styles.debugText}>Name: {currentUser.name}</Text>
+            </View>
+
             {/* Collection Name Input */}
             <Text style={styles.inputLabel}>Nombre de la colección</Text>
             <TextInput
@@ -176,7 +175,7 @@ export default function AddCollectionScreen() {
             {/* Predefined Images */}
             <Text style={styles.inputLabel}>O seleccione una imagen predefinida</Text>
             <View style={styles.predefinedImagesGrid}>
-              {predefinedImages.map((image) => (
+              {PREDEFINED_COLLECTION_IMAGES.map((image) => (
                 <TouchableOpacity
                   key={image.id}
                   style={[styles.predefinedImageContainer, coverImage === image.uri && styles.selectedPredefinedImage]}
@@ -189,19 +188,23 @@ export default function AddCollectionScreen() {
 
             {/* Create Collection Button */}
             <TouchableOpacity
-              style={[
-                styles.createButton,
-                (!collectionName.trim() || !coverImage) && styles.createButtonDisabled
-              ]}
-              onPress={createCollection}
-              disabled={isLoading || !collectionName.trim() || !coverImage}
+              style={[styles.createButton, (!collectionName.trim() || !coverImage) && styles.createButtonDisabled]}
+              onPress={handleCreateCollection}
+              disabled={isLoading || loading || !collectionName.trim() || !coverImage}
             >
-              {isLoading ? (
+              {isLoading || loading ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
                 <Text style={styles.createButtonText}>Crear Colección</Text>
               )}
             </TouchableOpacity>
+
+            {/* Error message */}
+            {error && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -242,6 +245,17 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     padding: 16,
+  },
+  debugContainer: {
+    backgroundColor: "#f0f0f0",
+    padding: 8,
+    borderRadius: 4,
+    marginBottom: 16,
+  },
+  debugText: {
+    fontSize: 12,
+    color: "#666",
+    fontFamily: "monospace",
   },
   inputLabel: {
     fontSize: 16,
@@ -337,48 +351,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-  footer: {
-    backgroundColor: "#222323",
-    padding: 20,
+  errorContainer: {
+    backgroundColor: "#ffebee",
+    padding: 12,
+    marginTop: 16,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: "#f44336",
   },
-  socialIcons: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 15,
-  },
-  footerSocialIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#3F3F46",
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 5,
-  },
-  footerText: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    textAlign: "center",
-    marginVertical: 10,
-  },
-  footerLinks: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 15,
-  },
-  footerLink: {
-    color: "#BBC5CB",
-    fontSize: 10,
-  },
-  footerLinkDivider: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    marginHorizontal: 5,
-  },
-  footerPrivacyText: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    textAlign: "center",
-    marginTop: 15,
+  errorText: {
+    color: "#c62828",
+    fontSize: 14,
   },
 })

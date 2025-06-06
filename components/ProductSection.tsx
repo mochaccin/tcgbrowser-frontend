@@ -1,7 +1,5 @@
-import { router } from "expo-router"
-import type React from "react"
-import { StyleSheet, Text, View } from "react-native"
-import ProductCarousel from "../components/ProductCarousel"
+import React from "react"
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native"
 
 interface Product {
   id: string
@@ -14,77 +12,91 @@ interface ProductSectionProps {
   title: string
   subtitle: string
   products: Product[]
+  onProductPress?: (id: string) => void
 }
 
-const ProductSection: React.FC<ProductSectionProps> = ({ title, subtitle, products }) => {
+const ProductSection = ({ title, subtitle, products, onProductPress }: ProductSectionProps) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+        <View>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
+        </View>
+        <TouchableOpacity>
+          <Text style={styles.viewAll}>Ver todo</Text>
+        </TouchableOpacity>
       </View>
-      <ProductCarousel
-        products={products}
-        onProductPress={(product) => {
-          router.push("/product-browser")
-        }}
-      />
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollView}>
+        {products.map((product) => (
+          <TouchableOpacity 
+            key={product.id} 
+            style={styles.productCard}
+            onPress={() => onProductPress && onProductPress(product.id)}
+          >
+            <Image source={{ uri: product.imageUri }} style={styles.productImage} />
+            <Text style={styles.productTitle} numberOfLines={1}>
+              {product.title}
+            </Text>
+            <Text style={styles.productBrand} numberOfLines={1}>
+              {product.brand}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 16,
+    marginVertical: 15,
   },
   header: {
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 15,
+    marginBottom: 10,
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "bold",
-    color: "#333",
-    marginBottom: 4,
+    color: "#222323",
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#666",
+    marginTop: 2,
   },
-  listContainer: {
-    paddingHorizontal: 16,
+  viewAll: {
+    fontSize: 14,
+    color: "#6c08dd",
+    fontWeight: "500",
+  },
+  scrollView: {
+    paddingLeft: 15,
   },
   productCard: {
-    width: 140,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    width: 120,
+    marginRight: 15,
   },
   productImage: {
-    width: "100%",
-    height: 120,
-    resizeMode: "cover",
-  },
-  productInfo: {
-    padding: 8,
+    width: 120,
+    height: 168,
+    borderRadius: 8,
+    marginBottom: 8,
   },
   productTitle: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 4,
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#222323",
   },
   productBrand: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#666",
-  },
-  separator: {
-    width: 12,
+    marginTop: 2,
   },
 })
 

@@ -9,6 +9,7 @@ import {
 import { Feather } from "@expo/vector-icons"
 import { router } from "expo-router"
 import { StatusBar } from "expo-status-bar"
+import { useEffect, useState } from "react"
 import {
   ActivityIndicator,
   Dimensions,
@@ -19,14 +20,44 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native"
 import ProductCarousel from "../../components/ProductCarousel"
-import { useAuth } from "../context/AuthContext"
+import { useUserStore } from "../../store/userStore"
 
 const { width, height } = Dimensions.get("window")
 
+// Interface para los datos del usuario desde la API
+interface UserProfile {
+  _id: string
+  username: string
+  name: string
+  email: string
+  location: string
+  nationality: string
+  img_url?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+// Interface para los productos publicados
+interface PublishedProduct {
+  id: string
+  title: string
+  brand: string
+  imageUri: string
+}
+
 export default function ProfileScreen() {
-  const { user, isLoading } = useAuth()
+  // Store hook
+  const { currentUser } = useUserStore()
+
+  // Local state
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [publishedProducts, setPublishedProducts] = useState<PublishedProduct[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [productsCount, setProductsCount] = useState(0)
 
   // Load Poppins fonts
   const [fontsLoaded] = useFonts({
@@ -36,35 +67,146 @@ export default function ProfileScreen() {
     Poppins_700Bold,
   })
 
-  // Sample published articles data
-  const publishedArticles = [
-    {
-      id: "1",
-      title: "Tarkir: Dragonstorm Play Caja de Sobres",
-      brand: "Tarkir: Dragonstorm",
-      imageUri: "https://cdnx.jumpseller.com/geekers1/image/56447402/resize/610/610?1747538860",
-    },
-    {
-      id: "2",
-      title: "Prismatic Evolutions Paquete de Refuerzo",
-      brand: "SV: Prismatic Evolutions",
-      imageUri: "https://cdnx.jumpseller.com/geekers1/image/56447402/resize/610/610?1747538860",
-    },
-    {
-      id: "3",
-      title: "Pokemon Prismatic Evolutions",
-      brand: "Pokemon",
-      imageUri: "https://cdnx.jumpseller.com/geekers1/image/56447402/resize/610/610?1747538860",
-    },
-  ]
+  // Cargar datos del usuario
+  const loadUserProfile = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const userId = currentUser._id
+      console.log(`🔍 PROFILE: Cargando perfil del usuario: ${userId}`)
+
+      // Cargar datos del usuario
+      const userResponse = await fetch(`http://localhost:3000/users/${userId}`)
+
+      if (!userResponse.ok) {
+        throw new Error(`Error ${userResponse.status}: ${userResponse.statusText}`)
+      }
+
+      const userData: UserProfile = await userResponse.json()
+      console.log("✅ PROFILE: Datos del usuario cargados:", userData)
+      setUserProfile(userData)
+
+      // Cargar productos publicados por el usuario (simulado por ahora)
+      // En el futuro podrías tener un endpoint como /products/user/:userId
+      await loadUserProducts(userId)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Error al cargar el perfil"
+      console.error("❌ PROFILE: Error cargando perfil:", err)
+      setError(errorMsg)
+      Alert.alert("Error", "No se pudo cargar el perfil del usuario")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (currentUser._id) {
+      loadUserProfile()
+    }
+  }, [currentUser._id])
+
+  // Cargar productos del usuario
+  const loadUserProducts = async (userId: string) => {
+    try {
+      console.log(`🔍 PROFILE: Cargando productos del usuario: ${userId}`)
+
+      // Por ahora usamos datos de ejemplo, pero podrías implementar un endpoint
+      // como GET /products/user/:userId en tu backend
+      const sampleProducts: PublishedProduct[] = [
+        {
+          id: "1",
+          title: "Charizard ex",
+          brand: "SV: Prismatic Evolutions",
+          imageUri: "https://images.pokemontcg.io/sv4pt5/6.png",
+        },
+        {
+          id: "2",
+          title: "Pikachu VMAX",
+          brand: "SWSH: Vivid Voltage",
+          imageUri: "https://images.pokemontcg.io/swsh4/188.png",
+        },
+        {
+          id: "3",
+          title: "Eevee",
+          brand: "SV: Prismatic Evolutions",
+          imageUri: "https://images.pokemontcg.io/sv4pt5/9.png",
+        },
+      ]
+
+      setPublishedProducts(sampleProducts)
+      setProductsCount(sampleProducts.length)
+
+      // Alternativa: Si tienes un endpoint real para productos del usuario
+      /*
+      const productsResponse = await fetch(`http://localhost:3000/products/user/${userId}`)
+      if (productsResponse.ok) {
+        const products = await productsResponse.json()
+        const transformedProducts = products.map((product: any) => ({
+          id: product._id,
+          title: product.name,
+          brand: product.setInfo?.name || 'Unknown Set',
+          imageUri: product.images?.small || product.images?.large || 'https://images.pokemontcg.io/sv4pt5/1.png'
+        }))
+        setPublishedProducts(transformedProducts)
+        setProductsCount(transformedProducts.length)
+      }
+      */
+    } catch (err) {
+      console.error("❌ PROFILE: Error cargando productos:", err)
+      // No mostramos error aquí porque no es crítico
+      setPublishedProducts([])
+      setProductsCount(0)
+    }
+  }
+
+  // Refresh profile data
+  const refreshProfile = async () => {
+    if (currentUser._id) {
+      await loadUserProfile()
+    }
+  }
+
+  // Navigate to edit profile
+  const navigateToEditProfile = () => {
+    router.push({
+      pathname: "/edit-profile",
+      params: {
+        userId: userProfile?._id,
+        currentName: userProfile?.name,
+        currentUsername: userProfile?.username,
+        currentEmail: userProfile?.email,
+        currentLocation: userProfile?.location,
+        currentNationality: userProfile?.nationality,
+        currentImageUrl: userProfile?.img_url,
+      },
+    })
+  }
 
   // Show loading while checking auth state or loading fonts
-  if (isLoading || !fontsLoaded) {
+  if (loading || !fontsLoaded) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6c08dd" />
-        <Text style={styles.loadingText}>Cargando...</Text>
+        <Text style={styles.loadingText}>Cargando perfil...</Text>
       </View>
+    )
+  }
+
+  // Show error state
+  if (error || !userProfile) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="dark" />
+        <View style={styles.errorContainer}>
+          <Feather name="alert-circle" size={48} color="#ff6b6b" />
+          <Text style={styles.errorTitle}>Error al cargar el perfil</Text>
+          <Text style={styles.errorText}>{error || "No se pudieron cargar los datos del usuario"}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={refreshProfile}>
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     )
   }
 
@@ -79,8 +221,11 @@ export default function ProfileScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Perfil</Text>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.headerIcon} onPress={() => router.push("/(user)/edit-profile")}>
+          <TouchableOpacity style={styles.headerIcon} onPress={navigateToEditProfile}>
             <Feather name="edit-2" size={24} color="black" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerIcon} onPress={refreshProfile}>
+            <Feather name="refresh-cw" size={20} color="black" />
           </TouchableOpacity>
         </View>
       </View>
@@ -90,7 +235,9 @@ export default function ProfileScreen() {
         <View style={styles.profileImageContainer}>
           <Image
             source={{
-              uri: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Untitled-uaThW8rED8JCpG84CL2P8zc7QmRKR5.png",
+              uri:
+                userProfile.img_url ||
+                "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Untitled-uaThW8rED8JCpG84CL2P8zc7QmRKR5.png",
             }}
             style={styles.profileImage}
           />
@@ -104,22 +251,32 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.socialIcon}>
             <Feather name="instagram" size={20} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.socialIcon}>
+          <TouchableOpacity
+            style={styles.socialIcon}
+            onPress={() => {
+              // Abrir cliente de email con el email del usuario
+              // En React Native podrías usar Linking.openURL(`mailto:${userProfile.email}`)
+            }}
+          >
             <Feather name="mail" size={20} color="white" />
           </TouchableOpacity>
         </View>
 
         {/* User Info */}
         <View style={styles.userInfoContainer}>
-          <Text style={styles.userName}>Vicente Torres Pelizari Serrano</Text>
-          <Text style={styles.userLocation}>Lican-Ray, Chile</Text>
-          <Text style={styles.userNationality}>Chileno</Text>
+          <Text style={styles.userName}>{userProfile.name}</Text>
+          <Text style={styles.userUsername}>@{userProfile.username}</Text>
+          <Text style={styles.userLocation}>{userProfile.location}</Text>
+          <Text style={styles.userNationality}>{userProfile.nationality}</Text>
+          <Text style={styles.userEmail}>{userProfile.email}</Text>
         </View>
 
         {/* User Stats */}
         <View style={styles.userStatsContainer}>
           <Feather name="star" size={20} color="#3ac692" />
-          <Text style={styles.userStats}>3,333 articulos publicados</Text>
+          <Text style={styles.userStats}>
+            {productsCount} artículo{productsCount !== 1 ? "s" : ""} publicado{productsCount !== 1 ? "s" : ""}
+          </Text>
         </View>
 
         {/* Quick Actions */}
@@ -138,9 +295,41 @@ export default function ProfileScreen() {
         {/* Published Articles */}
         <View style={styles.articlesSection}>
           <Text style={styles.sectionTitle}>Artículos Publicados</Text>
-          <Text style={styles.sectionSubtitle}>Artículos que este usuario ha publicado</Text>
+          <Text style={styles.sectionSubtitle}>
+            {publishedProducts.length > 0
+              ? `${publishedProducts.length} artículo${publishedProducts.length !== 1 ? "s" : ""} que este usuario ha publicado`
+              : "Este usuario no ha publicado artículos aún"}
+          </Text>
 
-          <ProductCarousel products={publishedArticles} />
+          {publishedProducts.length > 0 ? (
+            <ProductCarousel products={publishedProducts} />
+          ) : (
+            <View style={styles.emptyProductsContainer}>
+              <Feather name="package" size={48} color="#ccc" />
+              <Text style={styles.emptyProductsText}>No hay productos publicados</Text>
+              <TouchableOpacity style={styles.addProductButton} onPress={() => router.push("/add-product")}>
+                <Feather name="plus" size={16} color="#6c08dd" />
+                <Text style={styles.addProductButtonText}>Publicar primer producto</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Account Info */}
+        <View style={styles.accountInfoSection}>
+          <Text style={styles.sectionTitle}>Información de la Cuenta</Text>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Usuario desde:</Text>
+            <Text style={styles.infoValue}>
+              {userProfile.createdAt
+                ? new Date(userProfile.createdAt).toLocaleDateString("es-CL")
+                : "Fecha no disponible"}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>ID de usuario:</Text>
+            <Text style={styles.infoValue}>{userProfile._id}</Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -163,6 +352,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#666",
     fontFamily: "Poppins_400Regular",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 40,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+    marginTop: 16,
+    marginBottom: 8,
+    fontFamily: "Poppins_600SemiBold",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 24,
+    fontFamily: "Poppins_400Regular",
+  },
+  retryButton: {
+    backgroundColor: "#6c08dd",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+    fontFamily: "Poppins_600SemiBold",
   },
   header: {
     flexDirection: "row",
@@ -224,6 +446,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: "#222323",
   },
+  userUsername: {
+    fontSize: 16,
+    fontFamily: "Poppins_500Medium",
+    color: "#6c08dd",
+    marginTop: 4,
+  },
   userLocation: {
     fontSize: 16,
     fontFamily: "Poppins_400Regular",
@@ -231,9 +459,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   userNationality: {
-    fontSize: 18,
-    fontFamily: "Poppins_600SemiBold",
-    color: "#6c08dd",
+    fontSize: 16,
+    fontFamily: "Poppins_500Medium",
+    color: "#333",
+    marginTop: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    fontFamily: "Poppins_400Regular",
+    color: "#666",
     marginTop: 4,
   },
   userStatsContainer: {
@@ -274,6 +508,7 @@ const styles = StyleSheet.create({
   },
   articlesSection: {
     paddingHorizontal: 16,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 20,
@@ -286,43 +521,60 @@ const styles = StyleSheet.create({
     color: "#5e616c",
     marginBottom: 16,
   },
-  footer: {
-    backgroundColor: "#222323",
-    padding: 20,
-    marginTop: 20,
-  },
-  socialIcons: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 15,
-  },
-  footerSocialIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#3F3F46",
+  emptyProductsContainer: {
     alignItems: "center",
     justifyContent: "center",
-    marginHorizontal: 5,
+    padding: 40,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    marginTop: 8,
   },
-  footerText: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    textAlign: "center",
-    marginVertical: 10,
+  emptyProductsText: {
+    fontSize: 16,
+    color: "#666",
+    marginTop: 16,
+    marginBottom: 16,
+    fontFamily: "Poppins_400Regular",
   },
-  footerLinks: {
+  addProductButton: {
     flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 15,
+    alignItems: "center",
+    backgroundColor: "#f8f8ff",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#6c08dd",
   },
-  footerLink: {
-    color: "#BBC5CB",
-    fontSize: 10,
+  addProductButtonText: {
+    color: "#6c08dd",
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 8,
+    fontFamily: "Poppins_600SemiBold",
   },
-  footerLinkDivider: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    marginHorizontal: 5,
+  accountInfoSection: {
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontFamily: "Poppins_500Medium",
+    color: "#666",
+  },
+  infoValue: {
+    fontSize: 14,
+    fontFamily: "Poppins_400Regular",
+    color: "#333",
+    flex: 1,
+    textAlign: "right",
   },
 })

@@ -2,7 +2,7 @@
 import { Feather } from "@expo/vector-icons"
 import { router, useLocalSearchParams } from "expo-router"
 import { StatusBar } from "expo-status-bar"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   Dimensions,
   Image,
@@ -13,110 +13,124 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native"
 import { LineChart } from "react-native-chart-kit"
 import NavigationDrawer from "../../components/NavigationDrawer"
 
 const { width } = Dimensions.get("window")
 
-// Sample card data - in a real app this would come from an API
-const CARD_DETAILS = {
-  card1: {
-    id: "card1",
-    name: "Magikarp",
-    fullName: "Magikarp - 035/102 - Base Set (Shadowless)",
-    set: "Base Set (Shadowless)",
-    rarity: "Poco común",
-    number: "035/102",
-    type: "Agua",
-    artist: "Mitsuhiro Arita",
-    imageUri: "https://images.pokemontcg.io/base1/35.png",
-    marketPrice: "800",
-    recentPrice: "750",
-    highPrice: "1200",
-    lowPrice: "600",
-    totalListings: 156,
-    avgSalesPrice: "825",
-    totalSales: 89,
-    avgDailySales: 12,
-    priceHistory: {
-      labels: ["Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic", "Ene", "Feb"],
-      datasets: [
-        {
-          data: [650, 680, 720, 750, 790, 810, 780, 820, 850, 830, 800, 780],
-          color: (opacity = 1) => `rgba(108, 8, 221, ${opacity})`,
-          strokeWidth: 2,
-        },
-      ],
-    },
-    volatility: 0.75, // 0-1 scale
-    priceChange: -2.5, // percentage
-    priceChangeColor: "#e74c3c", // red for negative, green for positive
-  },
-  card2: {
-    id: "card2",
-    name: "Pikachu",
-    fullName: "Pikachu - 058/102 - Base Set (Shadowless)",
-    set: "Base Set (Shadowless)",
-    rarity: "Común",
-    number: "058/102",
-    type: "Eléctrico",
-    artist: "Atsuko Nishida",
-    imageUri: "https://images.pokemontcg.io/base1/58.png",
-    marketPrice: "1200",
-    recentPrice: "1150",
-    highPrice: "1800",
-    lowPrice: "900",
-    totalListings: 234,
-    avgSalesPrice: "1175",
-    totalSales: 156,
-    avgDailySales: 18,
-    priceHistory: {
-      labels: ["Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic", "Ene", "Feb"],
-      datasets: [
-        {
-          data: [950, 1000, 1050, 1100, 1250, 1300, 1350, 1400, 1350, 1300, 1250, 1200],
-          color: (opacity = 1) => `rgba(108, 8, 221, ${opacity})`,
-          strokeWidth: 2,
-        },
-      ],
-    },
-    volatility: 0.5, // 0-1 scale
-    priceChange: 3.2, // percentage
-    priceChangeColor: "#2ecc71", // green for positive
-  },
-  card3: {
-    id: "card3",
-    name: "Charizard",
-    fullName: "Charizard - 004/102 - Base Set (Shadowless)",
-    set: "Base Set (Shadowless)",
-    rarity: "Rara",
-    number: "004/102",
-    type: "Fuego",
-    artist: "Mitsuhiro Arita",
-    imageUri: "https://images.pokemontcg.io/base1/4.png",
-    marketPrice: "45000",
-    recentPrice: "42000",
-    highPrice: "65000",
-    lowPrice: "35000",
-    totalListings: 45,
-    avgSalesPrice: "43500",
-    totalSales: 23,
-    avgDailySales: 3,
-    priceHistory: {
-      labels: ["Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic", "Ene", "Feb"],
-      datasets: [
-        {
-          data: [38000, 40000, 42000, 45000, 50000, 55000, 60000, 65000, 58000, 52000, 48000, 45000],
-          color: (opacity = 1) => `rgba(108, 8, 221, ${opacity})`,
-          strokeWidth: 2,
-        },
-      ],
-    },
-    volatility: 0.85, // 0-1 scale
-    priceChange: -5.8, // percentage
-    priceChangeColor: "#e74c3c", // red for negative
-  },
+// Interfaz para los datos de la carta de la API
+interface ApiCard {
+  _id: string
+  name: string
+  tcg_id: string
+  supertype: string
+  subtypes: string[]
+  hp: string
+  types: string[]
+  evolvesFrom: string
+  evolvesTo: string[]
+  rules: string[]
+  abilities: any[]
+  attacks: {
+    name: string
+    cost: string[]
+    convertedEnergyCost: number
+    damage: string
+    text: string
+  }[]
+  weaknesses: {
+    type: string
+    value: string
+  }[]
+  resistances: {
+    type: string
+    value: string
+  }[]
+  retreatCost: string[]
+  convertedRetreatCost: number
+  setInfo: {
+    id: string
+    name: string
+    series: string
+    printedTotal: number
+    total: number
+    ptcgoCode: string
+    releaseDate: string
+    updatedAt: string
+    images: {
+      symbol: string
+      logo: string
+    }
+  }
+  number: string
+  artist: string
+  rarity: string
+  flavorText: string
+  nationalPokedexNumbers: number[]
+  legalities: {
+    unlimited: string
+  }
+  images: {
+    small: string
+    large: string
+  }
+  tcgplayer: {
+    url: string
+    updatedAt: string
+  }
+  stock_quantity: number
+  price: number
+  cost_price: number
+  is_available: boolean
+  condition: string
+  language: string
+  tags: string[]
+  created_at: string
+  updated_at: string
+}
+
+// Interfaz para los datos de la carta transformados para la UI
+interface CardDetails {
+  id: string
+  name: string
+  fullName: string
+  set: string
+  rarity: string
+  number: string
+  type: string
+  artist: string
+  imageUri: string
+  marketPrice: string
+  recentPrice: string
+  highPrice: string
+  lowPrice: string
+  totalListings: number
+  avgSalesPrice: string
+  totalSales: number
+  avgDailySales: number
+  priceHistory: {
+    labels: string[]
+    datasets: {
+      data: number[]
+      color: (opacity?: number) => string
+      strokeWidth: number
+    }[]
+  }
+  volatility: number
+  priceChange: number
+  priceChangeColor: string
+  hp: string
+  types: string[]
+  attacks: {
+    name: string
+    cost: string[]
+    damage: string
+    text: string
+  }[]
+  condition: string
+  language: string
 }
 
 // Sample seller listings
@@ -178,14 +192,94 @@ const chartConfig = {
 
 export default function CardDetailScreen() {
   const params = useLocalSearchParams()
-  const cardId = (params.cardId as string) || "card1"
+  const cardId = (params.cardId as string) || ""
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [showSortModal, setShowSortModal] = useState(false)
   const [selectedSort, setSelectedSort] = useState("price")
   const [timeRange, setTimeRange] = useState("3m") // 1m, 3m, 6m, 1y
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [cardDetails, setCardDetails] = useState<CardDetails | null>(null)
 
-  // Get card details (in a real app, this would be an API call)
-  const cardDetails = CARD_DETAILS[cardId as keyof typeof CARD_DETAILS] || CARD_DETAILS.card1
+  // Fetch card details from API
+  useEffect(() => {
+    const fetchCardDetails = async () => {
+      if (!cardId) return
+      
+      try {
+        setLoading(true)
+        setError(null)
+        
+        const response = await fetch(`http://localhost:3000/products/${cardId}`)
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        
+        const apiCard: ApiCard = await response.json()
+        
+        // Transform API data to UI format
+        const transformedCard = transformCardData(apiCard)
+        setCardDetails(transformedCard)
+        
+      } catch (err) {
+        console.error('Error fetching card details:', err)
+        setError(err instanceof Error ? err.message : 'Error desconocido al cargar los detalles de la carta')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCardDetails()
+  }, [cardId])
+
+  // Transform API card data to UI format
+  const transformCardData = (apiCard: ApiCard): CardDetails => {
+    // Generate mock price history data
+    const basePrice = apiCard.price
+    const priceHistory = {
+      labels: ["Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic", "Ene", "Feb"],
+      datasets: [
+        {
+          data: Array(12).fill(0).map(() => basePrice * (0.8 + Math.random() * 0.4)),
+          color: (opacity = 1) => `rgba(108, 8, 221, ${opacity})`,
+          strokeWidth: 2,
+        },
+      ],
+    }
+
+    // Calculate price change (mock data)
+    const priceChange = Math.random() > 0.5 ? Math.random() * 5 : -Math.random() * 5
+    
+    return {
+      id: apiCard._id,
+      name: apiCard.name,
+      fullName: `${apiCard.name} - ${apiCard.tcg_id} - ${apiCard.setInfo.name}`,
+      set: `${apiCard.setInfo.name} (${apiCard.setInfo.series})`,
+      rarity: apiCard.rarity,
+      number: `#${apiCard.number}`,
+      type: apiCard.types[0] || "Unknown",
+      artist: apiCard.artist,
+      imageUri: apiCard.images.large || apiCard.images.small,
+      marketPrice: apiCard.price.toLocaleString(),
+      recentPrice: (apiCard.price * 0.95).toLocaleString(),
+      highPrice: (apiCard.price * 1.2).toLocaleString(),
+      lowPrice: (apiCard.price * 0.8).toLocaleString(),
+      totalListings: apiCard.stock_quantity || 0,
+      avgSalesPrice: (apiCard.price * 1.05).toLocaleString(),
+      totalSales: Math.floor(Math.random() * 100),
+      avgDailySales: Math.floor(Math.random() * 10),
+      priceHistory,
+      volatility: Math.random(),
+      priceChange,
+      priceChangeColor: priceChange >= 0 ? "#2ecc71" : "#e74c3c",
+      hp: apiCard.hp,
+      types: apiCard.types,
+      attacks: apiCard.attacks,
+      condition: apiCard.condition,
+      language: apiCard.language,
+    }
+  }
 
   const sortOptions = [
     { id: "price", label: "Precio" },
@@ -203,7 +297,7 @@ export default function CardDetailScreen() {
 
   // Calculate volatility bars
   const getVolatilityBars = () => {
-    const volatility = cardDetails.volatility || 0.5
+    const volatility = cardDetails?.volatility || 0.5
     const activeIndex = Math.floor(volatility * 5)
     return Array(5)
       .fill(0)
@@ -213,6 +307,34 @@ export default function CardDetailScreen() {
   // Format price with commas
   const formatPrice = (price: string) => {
     return price.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  }
+
+  // Loading state
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6c08dd" />
+          <Text style={styles.loadingText}>Cargando detalles de la carta...</Text>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
+  // Error state
+  if (error || !cardDetails) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Feather name="alert-circle" size={48} color="#ff6b6b" />
+          <Text style={styles.errorText}>Error al cargar los detalles</Text>
+          <Text style={styles.errorSubtext}>{error || 'No se pudo cargar la información de la carta'}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
+            <Text style={styles.retryButtonText}>Volver</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    )
   }
 
   return (
@@ -266,8 +388,38 @@ export default function CardDetailScreen() {
               <Text style={styles.detailLabel}>Artista:</Text>
               <Text style={styles.detailValue}>{cardDetails.artist}</Text>
             </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>HP:</Text>
+              <Text style={styles.detailValue}>{cardDetails.hp}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Condición:</Text>
+              <Text style={styles.detailValue}>{cardDetails.condition}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Idioma:</Text>
+              <Text style={styles.detailValue}>{cardDetails.language}</Text>
+            </View>
           </View>
         </View>
+
+        {/* Attacks Section (if available) */}
+        {cardDetails.attacks && cardDetails.attacks.length > 0 && (
+          <View style={styles.detailsSection}>
+            <Text style={styles.sectionTitle}>Ataques</Text>
+            <View style={styles.attacksContainer}>
+              {cardDetails.attacks.map((attack, index) => (
+                <View key={index} style={styles.attackItem}>
+                  <View style={styles.attackHeader}>
+                    <Text style={styles.attackName}>{attack.name}</Text>
+                    <Text style={styles.attackDamage}>{attack.damage}</Text>
+                  </View>
+                  <Text style={styles.attackText}>{attack.text}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Price Points */}
         <View style={styles.priceSection}>
@@ -290,7 +442,7 @@ export default function CardDetailScreen() {
                   color={cardDetails.priceChangeColor}
                 />
                 <Text style={[styles.priceChangeText, { color: cardDetails.priceChangeColor }]}>
-                  {Math.abs(Number(cardDetails.priceChange))}%
+                  {Math.abs(Number(cardDetails.priceChange)).toFixed(1)}%
                 </Text>
               </View>
             </View>
@@ -448,9 +600,6 @@ export default function CardDetailScreen() {
             </View>
           ))}
         </View>
-
-        
-       
       </ScrollView>
 
       {/* Sort Modal */}
@@ -495,6 +644,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8F8F8",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ff6b6b',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#6c08dd',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
   header: {
     flexDirection: "row",
@@ -575,6 +764,34 @@ const styles = StyleSheet.create({
     color: "#333",
     flex: 1,
     textAlign: "right",
+  },
+  attacksContainer: {
+    gap: 16,
+  },
+  attackItem: {
+    backgroundColor: "#f8f9fa",
+    borderRadius: 8,
+    padding: 12,
+  },
+  attackHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  attackName: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  attackDamage: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#6c08dd",
+  },
+  attackText: {
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 20,
   },
   priceSection: {
     backgroundColor: "#fff",
@@ -860,44 +1077,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontWeight: "bold",
-  },
-  footer: {
-    backgroundColor: "#222323",
-    padding: 20,
-  },
-  socialIcons: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 15,
-  },
-  footerSocialIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#3F3F46",
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 5,
-  },
-  footerText: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    textAlign: "center",
-    marginVertical: 10,
-  },
-  footerLinks: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 15,
-  },
-  footerLink: {
-    color: "#BBC5CB",
-    fontSize: 10,
-  },
-  footerLinkDivider: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    marginHorizontal: 5,
   },
   modalOverlay: {
     flex: 1,

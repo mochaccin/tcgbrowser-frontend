@@ -4,89 +4,72 @@ import { router, useLocalSearchParams } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { useEffect, useState } from "react"
 import {
-    Image,
-    Modal,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Image,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
+  Alert,
 } from "react-native"
-import Toast from "../../components/Toast"; // Import the Toast component
+import Toast from "../../components/Toast" // Import the Toast component
+import { userStore } from "../../store/userStore"
 
-// Sample available cards data - Pokemon TCG only with working images
-const AVAILABLE_CARDS = [
-  {
-    id: "card1",
-    name: "Prismatic Evolutions Booster",
-    edition: "SV: Prismatic Evolutions",
-    price: "5.000CLP",
-    imageUri: "https://images.pokemontcg.io/sv4pt5/1.png",
-  },
-  {
-    id: "card2",
-    name: "Charizard ex",
-    edition: "SV: Prismatic Evolutions",
-    price: "15.000CLP",
-    imageUri: "https://images.pokemontcg.io/sv4pt5/6.png",
-  },
-  {
-    id: "card3",
-    name: "Pikachu VMAX",
-    edition: "SWSH: Vivid Voltage",
-    price: "8.000CLP",
-    imageUri: "https://images.pokemontcg.io/swsh4/188.png",
-  },
-  {
-    id: "card4",
-    name: "Eevee",
-    edition: "SV: Prismatic Evolutions",
-    price: "12.000CLP",
-    imageUri: "https://images.pokemontcg.io/sv4pt5/9.png",
-  },
-  {
-    id: "card5",
-    name: "Rayquaza ex",
-    edition: "SWSH: Battle Styles",
-    price: "4.500CLP",
-    imageUri: "https://images.pokemontcg.io/swsh5/110.png",
-  },
-  {
-    id: "card6",
-    name: "Umbreon VMAX",
-    edition: "SWSH: Evolving Skies",
-    price: "20.000CLP",
-    imageUri: "https://images.pokemontcg.io/swsh7/215.png",
-  },
-  {
-    id: "card7",
-    name: "Sylveon ex",
-    edition: "SV: Prismatic Evolutions",
-    price: "6.000CLP",
-    imageUri: "https://images.pokemontcg.io/sv4pt5/26.png",
-  },
-  {
-    id: "card8",
-    name: "Mew ex",
-    edition: "SWSH: Fusion Strike",
-    price: "3.000CLP",
-    imageUri: "https://images.pokemontcg.io/swsh8/151.png",
-  },
-]
+// Interfaz para los productos de la API
+interface ApiProduct {
+  _id: string
+  name: string
+  product_type: string
+  tcg_id?: string
+  supertype?: string
+  subtypes?: string[]
+  hp?: string
+  types?: string[]
+  rarity?: string
+  setInfo?: {
+    id: string
+    name: string
+    series?: string
+  }
+  number?: string
+  images?: {
+    small?: string
+    large?: string
+  }
+  price: number
+  stock_quantity: number
+  is_available: boolean
+  condition?: string
+}
+
+// Interfaz para las cartas transformadas para UI
+interface Card {
+  id: string
+  name: string
+  edition: string
+  price: string
+  imageUri: string
+  hp?: string
+  types: string[]
+  rarity: string
+  condition: string
+}
 
 // Available Pokemon TCG editions
-const POKEMON_EDITIONS = [
-  "Todas las ediciones",
-  "SV: Prismatic Evolutions",
-  "SWSH: Vivid Voltage",
-  "SWSH: Battle Styles",
-  "SWSH: Evolving Skies",
-  "SWSH: Fusion Strike",
-  "SV: Paldea Evolved",
-  "SV: Obsidian Flames",
-]
+// const POKEMON_EDITIONS = [
+//   "Todas las ediciones",
+//   "SV: Prismatic Evolutions",
+//   "SWSH: Vivid Voltage",
+//   "SWSH: Battle Styles",
+//   "SWSH: Evolving Skies",
+//   "SWSH: Fusion Strike",
+//   "SV: Paldea Evolved",
+//   "SV: Obsidian Flames",
+// ]
 
 // Filter options
 type SortOption = "name_asc" | "name_desc" | "price_asc" | "price_desc" | "edition_asc"
@@ -101,11 +84,11 @@ interface FilterState {
 export default function AddCardScreen() {
   const { collectionId } = useLocalSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedEdition, setSelectedEdition] = useState(POKEMON_EDITIONS[0])
+  const [selectedEdition, setSelectedEdition] = useState("Todas las ediciones")
   const [showEditionDropdown, setShowEditionDropdown] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
-  const [filteredCards, setFilteredCards] = useState(AVAILABLE_CARDS)
-  
+  const [filteredCards, setFilteredCards] = useState<Card[]>([])
+
   // Toast notification state
   const [toastVisible, setToastVisible] = useState(false)
   const [toastMessage, setToastMessage] = useState("")
@@ -119,9 +102,60 @@ export default function AddCardScreen() {
     selectedEditions: [],
   })
 
+  const [products, setProducts] = useState<ApiProduct[]>([])
+  const [loadingProducts, setLoadingProducts] = useState(true)
+  const [errorProducts, setErrorProducts] = useState<string | null>(null)
+
+  // Transformar producto de API a formato UI
+  const transformProduct = (apiProduct: ApiProduct): Card => ({
+    id: apiProduct._id,
+    name: apiProduct.name,
+    edition: apiProduct.setInfo
+      ? `${apiProduct.setInfo.name}${apiProduct.setInfo.series ? ` (${apiProduct.setInfo.series})` : ""}`
+      : "Set desconocido",
+    price: `${apiProduct.price.toLocaleString("es-CL")}CLP`,
+    imageUri: apiProduct.images?.small || apiProduct.images?.large || "https://images.pokemontcg.io/sv4pt5/1.png",
+    hp: apiProduct.hp,
+    types: apiProduct.types || [],
+    rarity: apiProduct.rarity || "Common",
+    condition: apiProduct.condition || "Near Mint",
+  })
+
+  // Cargar productos al iniciar
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setLoadingProducts(true)
+        setErrorProducts(null)
+
+        console.log("🔍 ADD_CARD: Cargando productos desde API...")
+
+        const response = await fetch("http://localhost:3000/products")
+
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${response.statusText}`)
+        }
+
+        const apiProducts: ApiProduct[] = await response.json()
+        console.log(`✅ ADD_CARD: ${apiProducts.length} productos cargados`)
+
+        setProducts(apiProducts)
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : "Error al cargar productos"
+        console.error("❌ ADD_CARD: Error cargando productos:", err)
+        setErrorProducts(errorMsg)
+        Alert.alert("Error", "No se pudieron cargar las cartas disponibles")
+      } finally {
+        setLoadingProducts(false)
+      }
+    }
+
+    loadProducts()
+  }, [])
+
   // Apply all filters
   useEffect(() => {
-    let filtered = [...AVAILABLE_CARDS]
+    let filtered = products.map(transformProduct)
 
     // Apply search filter
     if (searchQuery.trim() !== "") {
@@ -133,18 +167,18 @@ export default function AddCardScreen() {
 
     // Apply edition filter from dropdown
     if (selectedEdition !== "Todas las ediciones") {
-      filtered = filtered.filter((card) => card.edition === selectedEdition)
+      filtered = filtered.filter((card) => card.edition.includes(selectedEdition))
     }
 
     // Apply advanced edition filters
     if (filters.selectedEditions.length > 0) {
-      filtered = filtered.filter((card) => filters.selectedEditions.includes(card.edition))
+      filtered = filtered.filter((card) => filters.selectedEditions.some((edition) => card.edition.includes(edition)))
     }
 
     // Apply price range filter
     if (filters.priceRange !== "all") {
       filtered = filtered.filter((card) => {
-        const price = Number.parseFloat(card.price.replace("CLP", "").replace(".", "").replace(",", "."))
+        const price = Number.parseFloat(card.price.replace("CLP", "").replace(/\./g, "").replace(",", "."))
         switch (filters.priceRange) {
           case "0-5000":
             return price <= 5000
@@ -164,7 +198,7 @@ export default function AddCardScreen() {
     filtered = sortCards(filtered, filters.sortBy)
 
     setFilteredCards(filtered)
-  }, [searchQuery, selectedEdition, filters])
+  }, [searchQuery, selectedEdition, filters, products])
 
   // Show toast notification
   const showToast = (message: string, cardName?: string, cardImage?: string) => {
@@ -175,7 +209,7 @@ export default function AddCardScreen() {
   }
 
   // Sort cards based on selected option
-  const sortCards = (cardList: typeof AVAILABLE_CARDS, option: SortOption) => {
+  const sortCards = (cardList: Card[], option: SortOption) => {
     const sorted = [...cardList]
 
     switch (option) {
@@ -203,16 +237,25 @@ export default function AddCardScreen() {
   }
 
   // Add card to collection
-  const addCardToCollection = (cardId: string) => {
+  const addCardToCollection = async (cardId: string) => {
     console.log(`Adding card ${cardId} to collection ${collectionId}`)
-    
-    // Find the card that was added
-    const addedCard = AVAILABLE_CARDS.find(card => card.id === cardId)
-    
-    if (addedCard) {
-      showToast("Carta añadida a la colección", addedCard.name, addedCard.imageUri)
-    } else {
-      showToast("Carta añadida a la colección")
+
+    try {
+      // Find the card that was added for the toast notification
+      const addedCard = filteredCards.find((card) => card.id === cardId)
+
+      // Call the API through the store
+      await userStore.addCardToCollection(collectionId as string, cardId)
+
+      // Show success toast
+      if (addedCard) {
+        showToast("Carta añadida a la colección", addedCard.name, addedCard.imageUri)
+      } else {
+        showToast("Carta añadida a la colección")
+      }
+    } catch (error) {
+      console.error("Error adding card to collection:", error)
+      showToast("Error al añadir la carta a la colección")
     }
   }
 
@@ -242,9 +285,25 @@ export default function AddCardScreen() {
       priceRange: "all",
       selectedEditions: [],
     })
-    setSelectedEdition(POKEMON_EDITIONS[0])
+    setSelectedEdition("Todas las ediciones")
     setSearchQuery("")
   }
+
+  // Generar ediciones dinámicamente desde los productos
+  const getAvailableEditions = (): string[] => {
+    const editions = new Set<string>()
+    products.forEach((product) => {
+      if (product.setInfo?.name) {
+        const edition = product.setInfo.series
+          ? `${product.setInfo.name} (${product.setInfo.series})`
+          : product.setInfo.name
+        editions.add(edition)
+      }
+    })
+    return ["Todas las ediciones", ...Array.from(editions).sort()]
+  }
+
+  const POKEMON_EDITIONS = getAvailableEditions()
 
   return (
     <SafeAreaView style={styles.container}>
@@ -258,6 +317,31 @@ export default function AddCardScreen() {
         <Text style={styles.headerTitle}>Añadir carta a la colección</Text>
         <View style={styles.headerRight} />
       </View>
+
+      {/* Loading State */}
+      {loadingProducts && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6c08dd" />
+          <Text style={styles.loadingText}>Cargando cartas disponibles...</Text>
+        </View>
+      )}
+
+      {/* Error State */}
+      {errorProducts && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{errorProducts}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              setErrorProducts(null)
+              // Trigger reload by calling the useEffect again
+              window.location.reload()
+            }}
+          >
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -296,12 +380,7 @@ export default function AddCardScreen() {
                   setShowEditionDropdown(false)
                 }}
               >
-                <Text 
-                  style={[
-                    styles.dropdownItemText, 
-                    selectedEdition === edition && styles.selectedDropdownItemText
-                  ]}
-                >
+                <Text style={[styles.dropdownItemText, selectedEdition === edition && styles.selectedDropdownItemText]}>
                   {edition}
                 </Text>
                 {selectedEdition === edition && <Feather name="check" size={16} color="#6c08dd" />}
@@ -313,11 +392,7 @@ export default function AddCardScreen() {
 
       {/* Backdrop to close dropdown when clicking outside */}
       {showEditionDropdown && (
-        <TouchableOpacity 
-          style={styles.backdrop} 
-          activeOpacity={0}
-          onPress={() => setShowEditionDropdown(false)}
-        />
+        <TouchableOpacity style={styles.backdrop} activeOpacity={0} onPress={() => setShowEditionDropdown(false)} />
       )}
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -352,10 +427,7 @@ export default function AddCardScreen() {
         <View style={styles.cardsGrid}>
           {filteredCards.map((card) => (
             <View key={card.id} style={styles.cardContainer}>
-              <TouchableOpacity 
-                style={styles.addButton} 
-                onPress={() => addCardToCollection(card.id)}
-              >
+              <TouchableOpacity style={styles.addButton} onPress={() => addCardToCollection(card.id)}>
                 <Feather name="plus" size={16} color="white" />
               </TouchableOpacity>
               <Image source={{ uri: card.imageUri }} style={styles.cardImage} />
@@ -909,5 +981,43 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textAlign: "center",
     marginTop: 15,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 40,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+  },
+  errorContainer: {
+    backgroundColor: "#ffebee",
+    padding: 15,
+    marginHorizontal: 15,
+    marginVertical: 10,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: "#f44336",
+  },
+  errorText: {
+    color: "#c62828",
+    fontSize: 14,
+    marginBottom: 10,
+  },
+  retryButton: {
+    backgroundColor: "#f44336",
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 5,
+    alignSelf: "flex-start",
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
   },
 })

@@ -4,98 +4,72 @@ import { router, useLocalSearchParams } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { useEffect, useState } from "react"
 import {
-    Dimensions,
-    Image,
-    Modal,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Dimensions,
+  Image,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native"
 import NavigationDrawer from "../../components/NavigationDrawer"
 
 const { width } = Dimensions.get("window")
 
-// Sample card data
-const CARD_DATA = [
-  {
-    id: "card1",
-    name: "Magikarp",
-    set: "Conjunto base (sin sombras)",
-    rarity: "Poco común",
-    number: "#035/102",
-    listingCount: 3,
-    price: "800",
-    marketPrice: "900",
-    imageUri: "https://images.pokemontcg.io/base1/35.png",
-  },
-  {
-    id: "card2",
-    name: "Pikachu",
-    set: "Conjunto base (sin sombras)",
-    rarity: "Común",
-    number: "#058/102",
-    listingCount: 5,
-    price: "1.200",
-    marketPrice: "1.500",
-    imageUri: "https://images.pokemontcg.io/base1/58.png",
-  },
-  {
-    id: "card3",
-    name: "Charizard",
-    set: "Conjunto base (sin sombras)",
-    rarity: "Rara",
-    number: "#004/102",
-    listingCount: 2,
-    price: "45.000",
-    marketPrice: "50.000",
-    imageUri: "https://images.pokemontcg.io/base1/4.png",
-  },
-  {
-    id: "card4",
-    name: "Blastoise",
-    set: "Conjunto base (sin sombras)",
-    rarity: "Rara",
-    number: "#002/102",
-    listingCount: 1,
-    price: "35.000",
-    marketPrice: "40.000",
-    imageUri: "https://images.pokemontcg.io/base1/2.png",
-  },
-  {
-    id: "card5",
-    name: "Venusaur",
-    set: "Conjunto base (sin sombras)",
-    rarity: "Rara",
-    number: "#015/102",
-    listingCount: 2,
-    price: "30.000",
-    marketPrice: "32.000",
-    imageUri: "https://images.pokemontcg.io/base1/15.png",
-  },
-  {
-    id: "card6",
-    name: "Gyarados",
-    set: "Conjunto base (sin sombras)",
-    rarity: "Rara",
-    number: "#006/102",
-    listingCount: 3,
-    price: "15.000",
-    marketPrice: "18.000",
-    imageUri: "https://images.pokemontcg.io/base1/6.png",
-  },
-]
+// API Card interface based on your endpoint structure
+interface ApiCard {
+  _id: string
+  name: string
+  tcg_id: string
+  supertype: string
+  subtypes: string[]
+  hp: string
+  types: string[]
+  rarity: string
+  setInfo: {
+    name: string
+    series: string
+  }
+  number: string
+  images: {
+    small: string
+    large: string
+  }
+  price: number
+  stock_quantity: number
+  is_available: boolean
+  condition: string
+}
 
-// Available filters
+// Transformed card interface for UI
+interface Card {
+  id: string
+  name: string
+  set: string
+  rarity: string
+  number: string
+  listingCount: number
+  price: string
+  marketPrice: string
+  imageUri: string
+  hp: string
+  types: string[]
+  supertype: string
+  condition: string
+  isAvailable: boolean
+}
+
+// Available filters - you can expand these based on your API data
 const AVAILABLE_FILTERS = {
   categories: ["Pokémon", "Magic", "Yu-Gi-Oh", "Digimon", "One Piece"],
-  sets: ["Conjunto base", "Prismatic Evolutions", "Jungle", "Fossil", "Team Rocket"],
-  rarities: ["Común", "Poco común", "Rara", "Ultra Rara", "Secreta Rara"],
+  sets: [] as string[], // Will be populated from API data
+  rarities: [] as string[], // Will be populated from API data
   conditions: ["Mint", "Near Mint", "Excellent", "Good", "Played", "Poor"],
-  priceRanges: ["0-1.000", "1.000-5.000", "5.000-10.000", "10.000-50.000", "50.000+"],
+  priceRanges: ["0-1000", "1000-5000", "5000-10000", "10000-50000", "50000+"],
+  types: [] as string[], // Will be populated from API data
 }
 
 // Sort options
@@ -104,34 +78,190 @@ const SORT_OPTIONS = [
   { id: "price_desc", label: "Precio: mayor a menor" },
   { id: "name_asc", label: "Nombre: A-Z" },
   { id: "name_desc", label: "Nombre: Z-A" },
-  { id: "newest", label: "Más recientes" },
-  { id: "oldest", label: "Más antiguos" },
+  { id: "hp_desc", label: "HP: mayor a menor" },
+  { id: "hp_asc", label: "HP: menor a mayor" },
 ]
 
 export default function SearchResultsScreen() {
   const params = useLocalSearchParams()
+
+  // Debug detallado de parámetros
+  console.log("🔍 SEARCH: Raw params object:", params)
+  console.log("🔍 SEARCH: Params keys:", Object.keys(params))
+  console.log("🔍 SEARCH: Params values:", Object.values(params))
+
+  // Extraer parámetros de la URL
   const searchQuery = (params.query as string) || ""
+  const filterType = (params.filter as string) || ""
+  const filterValue = (params.value as string) || ""
+
+  console.log("📥 SEARCH: Parámetros extraídos:", {
+    filterType,
+    filterValue,
+    searchQuery,
+    rawParams: params,
+  })
+
+  console.log("📥 SEARCH: Parámetros recibidos:", { filterType, filterValue, searchQuery, allParams: params })
+
   const [drawerVisible, setDrawerVisible] = useState(false)
 
   // State
-  const [cards, setCards] = useState(CARD_DATA)
-  const [filteredCards, setFilteredCards] = useState(CARD_DATA)
+  const [cards, setCards] = useState<Card[]>([])
+  const [filteredCards, setFilteredCards] = useState<Card[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [activeFilters, setActiveFilters] = useState<string[]>(["Pokémon"])
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [showSortModal, setShowSortModal] = useState(false)
   const [selectedSort, setSelectedSort] = useState("name_asc")
-  const [selectedFilters, setSelectedFilters] = useState({
+  const [selectedFilters, setSelectedFilters] = useState<{
+    categories: string[]
+    sets: string[]
+    rarities: string[]
+    conditions: string[]
+    priceRanges: string[]
+    types: string[]
+  }>({
     categories: ["Pokémon"],
     sets: [],
     rarities: [],
     conditions: [],
     priceRanges: [],
+    types: [],
   })
   const [currentSearchQuery, setCurrentSearchQuery] = useState(searchQuery)
+  const [availableFilters, setAvailableFilters] = useState<{
+    categories: string[]
+    sets: string[]
+    rarities: string[]
+    conditions: string[]
+    priceRanges: string[]
+    types: string[]
+  }>(AVAILABLE_FILTERS)
+
+  // Transform API card data to UI format
+  const transformCard = (apiCard: ApiCard): Card => ({
+    id: apiCard._id,
+    name: apiCard.name,
+    set: `${apiCard.setInfo.name} (${apiCard.setInfo.series})`,
+    rarity: apiCard.rarity,
+    number: `#${apiCard.number}`,
+    listingCount: apiCard.stock_quantity,
+    price: apiCard.price.toLocaleString(),
+    marketPrice: (apiCard.price * 1.2).toLocaleString(), // Assuming 20% markup for market price
+    imageUri: apiCard.images.small,
+    hp: apiCard.hp,
+    types: apiCard.types,
+    supertype: apiCard.supertype,
+    condition: apiCard.condition,
+    isAvailable: apiCard.is_available,
+  })
+
+  // Fetch cards from API
+  const fetchCards = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const response = await fetch("http://localhost:3000/products")
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const apiCards: ApiCard[] = await response.json()
+      const transformedCards = apiCards.map(transformCard)
+
+      setCards(transformedCards)
+
+      // Extract unique values for filters
+      const uniqueSets = [...new Set(apiCards.map((card) => card.setInfo.name))]
+      const uniqueRarities = [...new Set(apiCards.map((card) => card.rarity))]
+      const uniqueTypes = [...new Set(apiCards.flatMap((card) => card.types))]
+
+      setAvailableFilters((prev) => ({
+        ...prev,
+        sets: uniqueSets,
+        rarities: uniqueRarities,
+        types: uniqueTypes,
+      }))
+
+      console.log("📦 SEARCH: Sets disponibles:", uniqueSets.slice(0, 10), "... (total:", uniqueSets.length, ")")
+    } catch (err) {
+      console.error("Error fetching cards:", err)
+      setError(err instanceof Error ? err.message : "Error desconocido al cargar las cartas")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Apply filters from navigation params - VERSIÓN ARREGLADA
+  useEffect(() => {
+    console.log("🔄 SEARCH: useEffect de filtros ejecutándose...")
+    console.log("   filterType:", filterType)
+    console.log("   filterValue:", filterValue)
+
+    if (filterType && filterValue) {
+      console.log(`🎯 SEARCH: Aplicando filtro: ${filterType} = ${filterValue}`)
+
+      setSelectedFilters((prev) => {
+        const newFilters = { ...prev }
+
+        switch (filterType) {
+          case "sets":
+            // Limpiar filtros de sets anteriores y aplicar el nuevo
+            newFilters.sets = [filterValue]
+            console.log(`✅ SEARCH: Filtro de set aplicado: ${filterValue}`)
+            break
+
+          case "categories":
+            if (!newFilters.categories.includes(filterValue)) {
+              newFilters.categories = [...newFilters.categories, filterValue]
+              console.log(`✅ SEARCH: Filtro de categoría aplicado: ${filterValue}`)
+            }
+            break
+
+          case "rarities":
+            if (!newFilters.rarities.includes(filterValue)) {
+              newFilters.rarities = [...newFilters.rarities, filterValue]
+            }
+            break
+
+          case "types":
+            if (!newFilters.types.includes(filterValue)) {
+              newFilters.types = [...newFilters.types, filterValue]
+            }
+            break
+
+          case "conditions":
+            if (!newFilters.conditions.includes(filterValue)) {
+              newFilters.conditions = [...newFilters.conditions, filterValue]
+            }
+            break
+
+          default:
+            console.warn(`❌ SEARCH: Tipo de filtro no reconocido: ${filterType}`)
+        }
+
+        console.log(`📊 SEARCH: Filtros después de aplicar:`, newFilters)
+        return newFilters
+      })
+    } else {
+      console.log("⚠️ SEARCH: No hay filtros para aplicar desde navegación")
+    }
+  }, [filterType, filterValue])
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchCards()
+  }, [])
 
   // Apply filters and sorting
   useEffect(() => {
-    let filtered = [...CARD_DATA]
+    let filtered = [...cards]
+
+    console.log(`🔍 SEARCH: Iniciando filtrado con ${filtered.length} cartas`)
 
     // Apply search query first
     if (currentSearchQuery.trim()) {
@@ -140,55 +270,101 @@ export default function SearchResultsScreen() {
         (card) =>
           card.name.toLowerCase().includes(query) ||
           card.set.toLowerCase().includes(query) ||
-          card.rarity.toLowerCase().includes(query),
+          card.rarity.toLowerCase().includes(query) ||
+          card.types.some((type: string) => type.toLowerCase().includes(query)),
       )
+      console.log(`🔍 SEARCH: Después de búsqueda por texto: ${filtered.length} cartas`)
     }
 
-    // Apply category filters
+    // Apply category filters (assuming Pokémon for now)
     if (selectedFilters.categories.length > 0) {
-      // In a real app, you would filter by category
-      // For this demo, we'll just keep all cards if Pokémon is selected
       if (!selectedFilters.categories.includes("Pokémon")) {
         filtered = []
+        console.log(`🔍 SEARCH: Filtro de categoría eliminó todas las cartas`)
       }
     }
 
-    // Apply set filters
+    // Apply set filters - VERSIÓN MEJORADA
     if (selectedFilters.sets.length > 0) {
-      filtered = filtered.filter((card) => selectedFilters.sets.some((set) => card.set.includes(set)))
+      console.log(`🔍 SEARCH: Aplicando filtros de sets:`, selectedFilters.sets)
+      console.log(`📦 SEARCH: Cartas antes del filtro de sets:`, filtered.length)
+
+      const originalFiltered = [...filtered]
+      filtered = filtered.filter((card) => {
+        const cardSetName = card.set.toLowerCase()
+        const matchesAnySet = selectedFilters.sets.some((filterSet) => {
+          const filterSetLower = filterSet.toLowerCase()
+          // Búsqueda más flexible - coincidencia parcial en ambas direcciones
+          const matches = cardSetName.includes(filterSetLower) || filterSetLower.includes(cardSetName)
+
+          if (matches) {
+            console.log(`✅ SEARCH: Carta coincide: ${card.name} - Set: ${card.set}`)
+          }
+
+          return matches
+        })
+
+        return matchesAnySet
+      })
+
+      console.log(`📦 SEARCH: Cartas después del filtro de sets: ${filtered.length}`)
+
+      if (filtered.length === 0 && originalFiltered.length > 0) {
+        console.log(`⚠️ SEARCH: El filtro de sets eliminó todas las cartas. Verificando coincidencias...`)
+        console.log(`   Sets buscados:`, selectedFilters.sets)
+        console.log(
+          `   Algunos sets de cartas:`,
+          originalFiltered.slice(0, 5).map((c) => c.set),
+        )
+      }
     }
 
     // Apply rarity filters
     if (selectedFilters.rarities.length > 0) {
       filtered = filtered.filter((card) => selectedFilters.rarities.includes(card.rarity))
+      console.log(`🔍 SEARCH: Después de filtro de rareza: ${filtered.length} cartas`)
+    }
+
+    // Apply condition filters
+    if (selectedFilters.conditions.length > 0) {
+      filtered = filtered.filter((card) => selectedFilters.conditions.includes(card.condition))
+      console.log(`🔍 SEARCH: Después de filtro de condición: ${filtered.length} cartas`)
+    }
+
+    // Apply type filters
+    if (selectedFilters.types.length > 0) {
+      filtered = filtered.filter((card) => card.types.some((type: string) => selectedFilters.types.includes(type)))
+      console.log(`🔍 SEARCH: Después de filtro de tipos: ${filtered.length} cartas`)
     }
 
     // Apply price range filters
     if (selectedFilters.priceRanges.length > 0) {
       filtered = filtered.filter((card) => {
-        const price = Number.parseInt(card.price.replace(/\./g, ""))
+        const price = Number.parseInt(card.price.replace(/\./g, "").replace(/,/g, ""))
         return selectedFilters.priceRanges.some((range) => {
-          const [min, max] = range.split("-").map((val) => Number.parseInt(val.replace(/\./g, "")))
+          const parts = range.split("-")
+          const min = Number.parseInt(parts[0]?.replace(/\./g, "") || "0")
+          const max = parts[1] ? Number.parseInt(parts[1].replace(/\./g, "")) : null
           if (max) {
             return price >= min && price <= max
           } else {
-            // Handle "50.000+" case
             return price >= min
           }
         })
       })
+      console.log(`🔍 SEARCH: Después de filtro de precio: ${filtered.length} cartas`)
     }
 
     // Apply sorting
     switch (selectedSort) {
       case "price_asc":
         filtered.sort(
-          (a, b) => Number.parseInt(a.price.replace(/\./g, "")) - Number.parseInt(b.price.replace(/\./g, "")),
+          (a, b) => Number.parseInt(a.price.replace(/\D/g, "")) - Number.parseInt(b.price.replace(/\D/g, "")),
         )
         break
       case "price_desc":
         filtered.sort(
-          (a, b) => Number.parseInt(b.price.replace(/\./g, "")) - Number.parseInt(a.price.replace(/\./g, "")),
+          (a, b) => Number.parseInt(b.price.replace(/\D/g, "")) - Number.parseInt(a.price.replace(/\D/g, "")),
         )
         break
       case "name_asc":
@@ -197,32 +373,34 @@ export default function SearchResultsScreen() {
       case "name_desc":
         filtered.sort((a, b) => b.name.localeCompare(a.name))
         break
-      // In a real app, you would implement newest/oldest sorting based on date fields
+      case "hp_desc":
+        filtered.sort((a, b) => Number.parseInt(b.hp || "0") - Number.parseInt(a.hp || "0"))
+        break
+      case "hp_asc":
+        filtered.sort((a, b) => Number.parseInt(a.hp || "0") - Number.parseInt(b.hp || "0"))
+        break
     }
+
+    console.log(`🎯 SEARCH: Resultados finales: ${filtered.length} cartas`)
+    console.log(`   Filtros activos:`, selectedFilters)
+    console.log(`   Filtro desde navegación: ${filterValue || "ninguno"}`)
 
     setFilteredCards(filtered)
 
     // Update active filters display
     const newActiveFilters: string[] = []
-    if (selectedFilters.categories.length > 0) {
-      newActiveFilters.push(...selectedFilters.categories)
-    }
-    if (selectedFilters.sets.length > 0) {
-      newActiveFilters.push(...selectedFilters.sets)
-    }
-    if (selectedFilters.rarities.length > 0) {
-      newActiveFilters.push(...selectedFilters.rarities)
-    }
-    if (selectedFilters.priceRanges.length > 0) {
-      newActiveFilters.push(...selectedFilters.priceRanges)
-    }
+    Object.entries(selectedFilters).forEach(([key, values]) => {
+      if (Array.isArray(values) && values.length > 0) {
+        newActiveFilters.push(...values)
+      }
+    })
     setActiveFilters(newActiveFilters)
-  }, [selectedFilters, selectedSort, currentSearchQuery])
+  }, [selectedFilters, selectedSort, currentSearchQuery, cards])
 
   // Toggle filter selection
   const toggleFilter = (category: keyof typeof selectedFilters, filter: string) => {
     setSelectedFilters((prev) => {
-      const current = [...prev[category]]
+      const current = [...(prev[category] as string[])]
       if (current.includes(filter)) {
         return { ...prev, [category]: current.filter((f) => f !== filter) }
       } else {
@@ -233,12 +411,11 @@ export default function SearchResultsScreen() {
 
   // Remove a specific filter
   const removeFilter = (filter: string) => {
-    // Find which category contains this filter
     for (const [category, filters] of Object.entries(selectedFilters)) {
       if (filters.includes(filter)) {
         setSelectedFilters((prev) => ({
           ...prev,
-          [category]: prev[category as keyof typeof selectedFilters].filter((f) => f !== filter),
+          [category]: (prev[category as keyof typeof selectedFilters] as string[]).filter((f) => f !== filter),
         }))
         break
       }
@@ -253,6 +430,7 @@ export default function SearchResultsScreen() {
       rarities: [],
       conditions: [],
       priceRanges: [],
+      types: [],
     })
   }
 
@@ -264,6 +442,36 @@ export default function SearchResultsScreen() {
   // Navigate to card detail
   const navigateToCardDetail = (cardId: string) => {
     router.push({ pathname: "/product-details", params: { cardId } })
+  }
+
+  // Refresh data
+  const handleRefresh = () => {
+    fetchCards()
+  }
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Cargando cartas...</Text>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Feather name="alert-circle" size={48} color="#ff6b6b" />
+          <Text style={styles.errorText}>Error al cargar las cartas</Text>
+          <Text style={styles.errorSubtext}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    )
   }
 
   return (
@@ -289,6 +497,9 @@ export default function SearchResultsScreen() {
           <TouchableOpacity style={styles.iconButton}>
             <Feather name="bell" size={24} color="black" />
           </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton} onPress={handleRefresh}>
+            <Feather name="refresh-cw" size={24} color="black" />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -301,9 +512,6 @@ export default function SearchResultsScreen() {
           value={currentSearchQuery}
           onChangeText={setCurrentSearchQuery}
           returnKeyType="search"
-          onSubmitEditing={() => {
-            // Trigger search when user presses enter
-          }}
         />
         <TouchableOpacity style={styles.searchButton}>
           <Feather name="search" size={20} color="black" />
@@ -314,6 +522,7 @@ export default function SearchResultsScreen() {
       <View style={styles.resultsHeader}>
         <View style={styles.activeFiltersContainer}>
           <Text style={styles.resultsCount}>{filteredCards.length} resultados</Text>
+          {filterValue && <Text style={styles.appliedFilterText}>Filtrado por: {filterValue}</Text>}
 
           <View style={styles.filtersActions}>
             <TouchableOpacity style={styles.filtersButton} onPress={() => setShowFilterModal(true)}>
@@ -324,15 +533,21 @@ export default function SearchResultsScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.sortButton} onPress={() => setShowSortModal(true)}>
-              <Text style={styles.sortButtonText}>A - Z</Text>
+              <Text style={styles.sortButtonText}>
+                {SORT_OPTIONS.find((opt) => opt.id === selectedSort)?.label.split(":")[0] || "A - Z"}
+              </Text>
               <Feather name="chevron-down" size={16} color="black" />
             </TouchableOpacity>
           </View>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-          {activeFilters.map((filter) => (
-            <TouchableOpacity key={filter} style={styles.filterChip} onPress={() => removeFilter(filter)}>
+          {activeFilters.map((filter, index) => (
+            <TouchableOpacity
+              key={`filter-${index}-${filter}`}
+              style={styles.filterChip}
+              onPress={() => removeFilter(filter)}
+            >
               <Text style={styles.filterChipText}>{filter}</Text>
               <Feather name="x" size={14} color="black" />
             </TouchableOpacity>
@@ -362,7 +577,11 @@ export default function SearchResultsScreen() {
 
         {/* Card Listings */}
         {filteredCards.map((card) => (
-          <TouchableOpacity key={card.id} style={styles.cardListing} onPress={() => navigateToCardDetail(card.id)}>
+          <TouchableOpacity
+            key={`card-${card.id}`}
+            style={styles.cardListing}
+            onPress={() => navigateToCardDetail(card.id)}
+          >
             <View style={styles.cardImageContainer}>
               <Image source={{ uri: card.imageUri }} style={styles.cardImage} />
             </View>
@@ -372,19 +591,34 @@ export default function SearchResultsScreen() {
               <Text style={styles.cardSet}>{card.set}</Text>
               <Text style={styles.cardRarity}>{card.rarity}</Text>
               <Text style={styles.cardNumber}>{card.number}</Text>
-              <Text style={styles.cardListingCount}>{card.listingCount} anuncio de</Text>
+              {card.hp && <Text style={styles.cardHp}>HP: {card.hp}</Text>}
+              <View style={styles.cardTypes}>
+                {card.types.map((type, index) => (
+                  <Text key={`${card.id}-type-${index}`} style={styles.cardType}>
+                    {type}
+                  </Text>
+                ))}
+              </View>
+              <Text style={styles.cardListingCount}>
+                {card.listingCount} {card.isAvailable ? "disponible" : "agotado"}
+              </Text>
               <Text style={styles.cardPrice}>$ {card.price} CLP</Text>
               <Text style={styles.cardMarketPrice}>Precio de mercado:</Text>
               <Text style={styles.cardMarketPriceValue}>$ {card.marketPrice} CLP</Text>
+              <Text style={styles.cardCondition}>Estado: {card.condition}</Text>
             </View>
           </TouchableOpacity>
         ))}
 
-        {filteredCards.length === 0 && (
+        {filteredCards.length === 0 && !loading && (
           <View style={styles.noResultsContainer}>
             <Feather name="search" size={48} color="#ccc" />
             <Text style={styles.noResultsText}>No se encontraron resultados</Text>
-            <Text style={styles.noResultsSubtext}>Intenta con otros filtros o términos de búsqueda</Text>
+            <Text style={styles.noResultsSubtext}>
+              {filterValue
+                ? `No hay cartas disponibles para "${filterValue}"`
+                : "Intenta con otros filtros o términos de búsqueda"}
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -410,9 +644,9 @@ export default function SearchResultsScreen() {
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Categorías</Text>
                 <View style={styles.filterOptions}>
-                  {AVAILABLE_FILTERS.categories.map((category) => (
+                  {availableFilters.categories.map((category, index) => (
                     <TouchableOpacity
-                      key={category}
+                      key={`category-${index}-${category}`}
                       style={[
                         styles.filterOption,
                         selectedFilters.categories.includes(category) && styles.filterOptionSelected,
@@ -436,9 +670,9 @@ export default function SearchResultsScreen() {
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Sets</Text>
                 <View style={styles.filterOptions}>
-                  {AVAILABLE_FILTERS.sets.map((set) => (
+                  {availableFilters.sets.map((set, index) => (
                     <TouchableOpacity
-                      key={set}
+                      key={`set-${index}-${set}`}
                       style={[styles.filterOption, selectedFilters.sets.includes(set) && styles.filterOptionSelected]}
                       onPress={() => toggleFilter("sets", set)}
                     >
@@ -455,13 +689,36 @@ export default function SearchResultsScreen() {
                 </View>
               </View>
 
+              {/* Types */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Tipos</Text>
+                <View style={styles.filterOptions}>
+                  {availableFilters.types.map((type, index) => (
+                    <TouchableOpacity
+                      key={`type-${index}-${type}`}
+                      style={[styles.filterOption, selectedFilters.types.includes(type) && styles.filterOptionSelected]}
+                      onPress={() => toggleFilter("types", type)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterOptionText,
+                          selectedFilters.types.includes(type) && styles.filterOptionTextSelected,
+                        ]}
+                      >
+                        {type}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
               {/* Rarities */}
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Rareza</Text>
                 <View style={styles.filterOptions}>
-                  {AVAILABLE_FILTERS.rarities.map((rarity) => (
+                  {availableFilters.rarities.map((rarity, index) => (
                     <TouchableOpacity
-                      key={rarity}
+                      key={`rarity-${index}-${rarity}`}
                       style={[
                         styles.filterOption,
                         selectedFilters.rarities.includes(rarity) && styles.filterOptionSelected,
@@ -485,9 +742,9 @@ export default function SearchResultsScreen() {
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Estado</Text>
                 <View style={styles.filterOptions}>
-                  {AVAILABLE_FILTERS.conditions.map((condition) => (
+                  {availableFilters.conditions.map((condition, index) => (
                     <TouchableOpacity
-                      key={condition}
+                      key={`condition-${index}-${condition}`}
                       style={[
                         styles.filterOption,
                         selectedFilters.conditions.includes(condition) && styles.filterOptionSelected,
@@ -511,9 +768,9 @@ export default function SearchResultsScreen() {
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Rango de Precio</Text>
                 <View style={styles.filterOptions}>
-                  {AVAILABLE_FILTERS.priceRanges.map((range) => (
+                  {availableFilters.priceRanges.map((range, index) => (
                     <TouchableOpacity
-                      key={range}
+                      key={`price-${index}-${range}`}
                       style={[
                         styles.filterOption,
                         selectedFilters.priceRanges.includes(range) && styles.filterOptionSelected,
@@ -563,9 +820,9 @@ export default function SearchResultsScreen() {
             </View>
 
             <ScrollView style={styles.sortModalContent}>
-              {SORT_OPTIONS.map((option) => (
+              {SORT_OPTIONS.map((option, index) => (
                 <TouchableOpacity
-                  key={option.id}
+                  key={`sort-${index}-${option.id}`}
                   style={[styles.sortOption, selectedSort === option.id && styles.sortOptionSelected]}
                   onPress={() => {
                     setSelectedSort(option.id)
@@ -584,273 +841,341 @@ export default function SearchResultsScreen() {
   )
 }
 
+// Complete StyleSheet with all styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F8F8",
+    backgroundColor: "#fff",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#666",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#ff6b6b",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 8,
+    textAlign: "center",
+  },
+  retryButton: {
+    backgroundColor: "#6c08dd",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  retryButtonText: {
+    color: "white",
+    fontWeight: "bold",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
   },
   logoContainer: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#6c08dd",
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
   },
   logoTextPurple: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
     color: "#6c08dd",
   },
   logoTextBlack: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
-    color: "#000",
+    color: "black",
   },
   headerIcons: {
     flexDirection: "row",
+    alignItems: "center",
   },
   iconButton: {
-    marginLeft: 15,
+    marginLeft: 16,
   },
   searchContainer: {
     flexDirection: "row",
-    marginHorizontal: 15,
-    marginVertical: 10,
-    borderWidth: 1,
-    borderColor: "#dadada",
-    borderRadius: 20,
-    backgroundColor: "#fff",
-    overflow: "hidden",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
   },
   searchInput: {
     flex: 1,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    fontSize: 14,
+    height: 40,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginRight: 8,
   },
   searchButton: {
     padding: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    width: 40,
   },
-  // Update the resultsHeader style
   resultsHeader: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
   },
-  // Update the activeFiltersContainer style
   activeFiltersContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  // Add this new style
+  resultsCount: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "black",
+  },
+  appliedFilterText: {
+    fontSize: 12,
+    color: "#6c08dd",
+    fontWeight: "500",
+    marginLeft: 8,
+  },
   filtersActions: {
     flexDirection: "row",
     alignItems: "center",
   },
-  // Update the resultsCount style
-  resultsCount: {
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  // Update the filtersScroll style
-  filtersScroll: {
-    marginTop: 5,
-  },
-  filterChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f0f0f0",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-    marginRight: 8,
-  },
-  filterChipText: {
-    fontSize: 12,
-    marginRight: 5,
-  },
   filtersButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#f8f8f8",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 15,
-    marginLeft: 8,
-    borderWidth: 1,
-    borderColor: "#dadada",
+    borderRadius: 16,
+    marginRight: 8,
   },
   filtersButtonText: {
     fontSize: 14,
-    fontWeight: "500",
-    marginRight: 5,
+    color: "black",
+    marginRight: 4,
   },
   filtersBadge: {
     backgroundColor: "#6c08dd",
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
     alignItems: "center",
     justifyContent: "center",
   },
   filtersBadgeText: {
-    color: "#fff",
-    fontSize: 10,
+    fontSize: 12,
+    color: "white",
     fontWeight: "bold",
   },
   sortButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#f8f8f8",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 15,
-    marginLeft: 8,
-    borderWidth: 1,
-    borderColor: "#dadada",
+    borderRadius: 16,
   },
   sortButtonText: {
     fontSize: 14,
-    fontWeight: "500",
-    marginRight: 5,
+    color: "black",
+    marginRight: 4,
+  },
+  filtersScroll: {
+    marginTop: 8,
+  },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#e8e8e8",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  filterChipText: {
+    fontSize: 12,
+    color: "black",
+    marginRight: 4,
   },
   scrollView: {
     flex: 1,
   },
   featuredBanner: {
-    height: 120,
-    marginHorizontal: 15,
-    marginBottom: 15,
-    borderRadius: 10,
+    height: 200,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderRadius: 12,
     overflow: "hidden",
-    position: "relative",
   },
   featuredBannerImage: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
   },
   featuredBannerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.3)",
     justifyContent: "center",
-    padding: 15,
+    alignItems: "center",
   },
   featuredBannerContent: {
-    width: "70%",
+    alignItems: "center",
   },
   featuredBannerTitle: {
-    color: "#fff",
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: "bold",
+    color: "white",
+    textAlign: "center",
+    marginBottom: 8,
   },
   featuredBannerSubtitle: {
-    color: "#fff",
-    fontSize: 14,
-    marginBottom: 10,
+    fontSize: 16,
+    color: "white",
+    textAlign: "center",
+    marginBottom: 16,
   },
   featuredBannerButton: {
-    backgroundColor: "#fff",
-    paddingHorizontal: 15,
-    paddingVertical: 5,
-    borderRadius: 15,
-    alignSelf: "flex-start",
+    backgroundColor: "#6c08dd",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
   },
   featuredBannerButtonText: {
-    color: "#000",
-    fontSize: 12,
+    color: "white",
     fontWeight: "bold",
   },
   cardListing: {
     flexDirection: "row",
-    backgroundColor: "#fff",
-    marginHorizontal: 15,
-    marginBottom: 15,
-    borderRadius: 10,
-    overflow: "hidden",
+    backgroundColor: "white",
+    marginHorizontal: 16,
+    marginVertical: 6,
+    borderRadius: 12,
+    padding: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    padding: 10,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   cardImageContainer: {
-    width: 100,
-    height: 140,
-    marginRight: 15,
+    width: 80,
+    height: 112,
+    borderRadius: 8,
+    overflow: "hidden",
+    marginRight: 12,
   },
   cardImage: {
     width: "100%",
     height: "100%",
-    resizeMode: "contain",
+    resizeMode: "cover",
   },
   cardDetails: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "space-between",
   },
   cardName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
-    marginBottom: 4,
+    color: "black",
+    marginBottom: 2,
   },
   cardSet: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#666",
     marginBottom: 2,
   },
   cardRarity: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#666",
     marginBottom: 2,
   },
   cardNumber: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#666",
-    marginBottom: 8,
+    marginBottom: 2,
+  },
+  cardHp: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 2,
+  },
+  cardTypes: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 4,
+  },
+  cardType: {
+    fontSize: 10,
+    backgroundColor: "#f0f0f0",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 4,
+    marginBottom: 2,
   },
   cardListingCount: {
     fontSize: 12,
-    color: "#999",
+    color: "#666",
     marginBottom: 4,
   },
   cardPrice: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
-    marginBottom: 4,
+    color: "#6c08dd",
+    marginBottom: 2,
   },
   cardMarketPrice: {
-    fontSize: 12,
+    fontSize: 10,
     color: "#999",
   },
   cardMarketPriceValue: {
-    fontSize: 14,
-    color: "#6c08dd",
-    fontWeight: "bold",
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 2,
+  },
+  cardCondition: {
+    fontSize: 11,
+    color: "#888",
+    marginTop: 2,
   },
   noResultsContainer: {
     alignItems: "center",
     justifyContent: "center",
-    padding: 40,
-    marginVertical: 20,
+    paddingVertical: 60,
   },
   noResultsText: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#666",
+    color: "#ccc",
     marginTop: 16,
   },
   noResultsSubtext: {
@@ -861,49 +1186,51 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
   filterModalContainer: {
-    backgroundColor: "#fff",
+    backgroundColor: "white",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "80%",
   },
   filterModalHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    padding: 15,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: "#f0f0f0",
   },
   filterModalTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#333",
+    color: "black",
   },
   filterModalContent: {
-    padding: 15,
-    maxHeight: 500,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   filterSection: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   filterSectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    marginBottom: 10,
+    color: "black",
+    marginBottom: 12,
   },
   filterOptions: {
     flexDirection: "row",
     flexWrap: "wrap",
   },
   filterOption: {
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#f8f8f8",
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 16,
     marginRight: 8,
     marginBottom: 8,
   },
@@ -912,27 +1239,29 @@ const styles = StyleSheet.create({
   },
   filterOptionText: {
     fontSize: 14,
+    color: "black",
   },
   filterOptionTextSelected: {
-    color: "#fff",
+    color: "white",
   },
   filterModalActions: {
     flexDirection: "row",
-    padding: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderTopWidth: 1,
-    borderTopColor: "#eee",
+    borderTopColor: "#f0f0f0",
   },
   clearFiltersButton: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#f8f8f8",
     paddingVertical: 12,
     borderRadius: 8,
-    marginRight: 10,
     alignItems: "center",
+    marginRight: 8,
   },
   clearFiltersText: {
-    color: "#666",
-    fontWeight: "bold",
+    fontSize: 16,
+    color: "black",
   },
   applyFiltersButton: {
     flex: 1,
@@ -940,99 +1269,50 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: "center",
+    marginLeft: 8,
   },
   applyFiltersText: {
-    color: "#fff",
+    fontSize: 16,
+    color: "white",
     fontWeight: "bold",
   },
   sortModalContainer: {
-    position: "absolute",
-    top: "30%",
-    left: "10%",
-    right: "10%",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    backgroundColor: "white",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "50%",
   },
   sortModalHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    padding: 15,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: "#f0f0f0",
   },
   sortModalTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#333",
+    color: "black",
   },
   sortModalContent: {
-    maxHeight: 300,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   sortOption: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 12,
-    paddingHorizontal: 15,
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
   },
   sortOptionSelected: {
-    backgroundColor: "#f0e6ff",
+    backgroundColor: "#f8f8ff",
   },
   sortOptionText: {
     fontSize: 16,
-    color: "#333",
-  },
-  footer: {
-    backgroundColor: "#222323",
-    padding: 20,
-  },
-  socialIcons: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 15,
-  },
-  footerSocialIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#3F3F46",
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 5,
-  },
-  footerText: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    textAlign: "center",
-    marginVertical: 10,
-  },
-  footerLinks: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 15,
-  },
-  footerLink: {
-    color: "#BBC5CB",
-    fontSize: 10,
-  },
-  footerLinkDivider: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    marginHorizontal: 5,
-  },
-  footerPrivacyText: {
-    color: "#BBC5CB",
-    fontSize: 10,
-    textAlign: "center",
-    marginTop: 15,
+    color: "black",
   },
 })
