@@ -4,7 +4,6 @@ import { router } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { useEffect, useState } from "react"
 import {
-  Alert,
   Image,
   Modal,
   RefreshControl,
@@ -15,6 +14,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native"
 import { useUserStore, type Product } from "../../store/userStore"
 
@@ -45,6 +45,7 @@ export default function InventoryScreen() {
   const [filteredItems, setFilteredItems] = useState<Product[]>([])
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null) // 🔧 NUEVO: Estado para indicador de carga
 
   // Filter state
   const [filters, setFilters] = useState<FilterState>({
@@ -73,9 +74,9 @@ export default function InventoryScreen() {
     if (currentUser && !inventoryLoading) {
       loadUserInventory()
     }
-  }, [currentUser]) // Remove loadUserInventory from dependencies
+  }, [currentUser])
 
-  // Pull to refresh - remove the useCallback wrapper
+  // Pull to refresh
   const onRefresh = async () => {
     setRefreshing(true)
     try {
@@ -98,7 +99,7 @@ export default function InventoryScreen() {
   // Get image URI with fallback
   const getImageUri = (item: Product) => {
     return (
-      item.images?.large || item.images?.small || item.images?.symbol || "https://images.pokemontcg.io/sv4pt5/1.png" // Fallback image
+      item.images?.large || item.images?.small || item.images?.symbol || "https://images.pokemontcg.io/sv4pt5/1.png"
     )
   }
 
@@ -109,34 +110,27 @@ export default function InventoryScreen() {
     }
   }, [currentUser, inventoryLoading, loadUserInventory])
 
-  // Remove item from inventory - SIMPLIFIED FOR TESTING
-  const removeItem = (productId: string) => {
-    console.log(`🔴 REMOVE ITEM CALLED: ${productId}`)
-
-    // Simple alert first to test if function is called
-    Alert.alert("Test", `Trying to delete product: ${productId}`, [
-      { text: "Cancel" },
-      {
-        text: "Delete",
-        onPress: () => {
-          console.log(`🗑️ DELETE CONFIRMED: ${productId}`)
-          // Call the actual delete function
-          handleDelete(productId)
-        },
-      },
-    ])
-  }
-
-  // Separate function for the actual delete
-  const handleDelete = async (productId: string) => {
+  // 🔧 MÉTODO SIMPLIFICADO: Eliminar producto directamente sin confirmación
+  const handleDeleteProduct = async (productId: string, productName: string) => {
     try {
-      console.log(`🚀 STARTING DELETE: ${productId}`)
+      console.log(`🗑️ INVENTORY: Eliminando producto: ${productId} - ${productName}`)
+
+      // Mostrar indicador de carga
+      setDeletingId(productId)
+
+      // Llamar al método del store para eliminar
       await removeProductFromInventory(productId)
-      console.log(`✅ DELETE SUCCESS: ${productId}`)
-      Alert.alert("Success", "Item deleted")
+
+      console.log(`✅ INVENTORY: Producto eliminado exitosamente: ${productId}`)
     } catch (error) {
-      console.log(`❌ DELETE ERROR: ${error}`)
-      Alert.alert("Error", `Failed to delete: ${error?.message}`)
+      console.error("❌ INVENTORY: Error eliminando producto:", error)
+      console.error("❌ INVENTORY: Error details:", {
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : "No stack trace",
+      })
+    } finally {
+      // Ocultar indicador de carga
+      setDeletingId(null)
     }
   }
 
@@ -307,7 +301,7 @@ export default function InventoryScreen() {
         />
       </View>
 
-      {/* Stats Container - show even without currentUser */}
+      {/* Stats Container */}
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>{inventoryStats.totalProducts}</Text>
@@ -395,17 +389,25 @@ export default function InventoryScreen() {
             {filteredItems.map((item) => (
               <View key={item._id} style={styles.itemContainer}>
                 <Image source={{ uri: getImageUri(item) }} style={styles.itemImage} />
+
+                {/* 🔧 BOTÓN DE ELIMINAR SIMPLIFICADO */}
                 <TouchableOpacity
-                  style={styles.removeButton}
+                  style={[styles.removeButton, deletingId === item._id && styles.removeButtonLoading]}
                   onPress={() => {
-                    console.log(`🔴 BUTTON TOUCHED: ${item._id}`)
-                    removeItem(item._id)
+                    console.log(`🗑️ Botón eliminar presionado para producto: ${item._id} - ${item.name}`)
+                    handleDeleteProduct(item._id, item.name)
                   }}
+                  disabled={deletingId === item._id}
                   activeOpacity={0.7}
                   hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                 >
-                  <Feather name="x" size={16} color="white" />
+                  {deletingId === item._id ? (
+                    <ActivityIndicator size={16} color="white" />
+                  ) : (
+                    <Feather name="x" size={16} color="white" />
+                  )}
                 </TouchableOpacity>
+
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemName} numberOfLines={1}>
                     {item.name}
@@ -767,6 +769,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+  },
+  // 🔧 NUEVO: Estilo para botón en estado de carga
+  removeButtonLoading: {
+    backgroundColor: "#ff6666",
   },
   itemImage: {
     width: "100%",
