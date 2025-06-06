@@ -45,7 +45,8 @@
     "react-native-svg": "^13.9.0",
     "react-native-web": "~0.20.0",
     "react-native-webview": "13.13.5",
-    "tcgbrowser-frontend": "file:"
+    "tcgbrowser-frontend": "file:",
+    "zustand": "^5.0.5"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

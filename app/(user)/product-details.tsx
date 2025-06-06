@@ -18,7 +18,20 @@ import {
 import { LineChart } from "react-native-chart-kit"
 import NavigationDrawer from "../../components/NavigationDrawer"
 
-const { width } = Dimensions.get("window")
+const { width, height } = Dimensions.get("window")
+
+// Tasa de cambio estática USD a CLP
+const USD_TO_CLP_RATE = 950 // Actualizar según sea necesario
+
+// Función para convertir USD a CLP
+const convertUSDToCLP = (usdAmount: number): number => {
+  return Math.round(usdAmount * USD_TO_CLP_RATE)
+}
+
+// Función para formatear precios en CLP
+const formatCLPPrice = (clpAmount: number): string => {
+  return clpAmount.toLocaleString('es-CL')
+}
 
 // Interfaz para los datos de la carta de la API
 interface ApiCard {
@@ -102,12 +115,12 @@ interface CardDetails {
   type: string
   artist: string
   imageUri: string
-  marketPrice: string
-  recentPrice: string
-  highPrice: string
-  lowPrice: string
+  marketPrice: number // Ahora en CLP
+  recentPrice: number // Ahora en CLP
+  highPrice: number // Ahora en CLP
+  lowPrice: number // Ahora en CLP
   totalListings: number
-  avgSalesPrice: string
+  avgSalesPrice: number // Ahora en CLP
   totalSales: number
   avgDailySales: number
   priceHistory: {
@@ -133,12 +146,12 @@ interface CardDetails {
   language: string
 }
 
-// Sample seller listings
+// Sample seller listings con precios en CLP
 const SAMPLE_LISTINGS = [
   {
     id: "listing1",
     sellerName: "Jonnaa_",
-    price: "2070",
+    price: convertUSDToCLP(2.18), // Convertido de USD
     condition: "Ligeramente jugado",
     rating: 4.5,
     transactions: 3456,
@@ -147,7 +160,7 @@ const SAMPLE_LISTINGS = [
   {
     id: "listing2",
     sellerName: "CardMaster",
-    price: "1950",
+    price: convertUSDToCLP(2.05), // Convertido de USD
     condition: "Mint",
     rating: 4.8,
     transactions: 2890,
@@ -156,7 +169,7 @@ const SAMPLE_LISTINGS = [
   {
     id: "listing3",
     sellerName: "PokemonPro",
-    price: "2200",
+    price: convertUSDToCLP(2.32), // Convertido de USD
     condition: "Near Mint",
     rating: 4.7,
     transactions: 1567,
@@ -165,7 +178,7 @@ const SAMPLE_LISTINGS = [
   {
     id: "listing4",
     sellerName: "TCGExpert",
-    price: "1875",
+    price: convertUSDToCLP(1.97), // Convertido de USD
     condition: "Excelente",
     rating: 4.9,
     transactions: 4123,
@@ -235,13 +248,15 @@ export default function CardDetailScreen() {
 
   // Transform API card data to UI format
   const transformCardData = (apiCard: ApiCard): CardDetails => {
-    // Generate mock price history data
-    const basePrice = apiCard.price
+    // Convertir precios de USD a CLP
+    const basePriceCLP = convertUSDToCLP(apiCard.price)
+    
+    // Generate mock price history data en CLP
     const priceHistory = {
       labels: ["Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic", "Ene", "Feb"],
       datasets: [
         {
-          data: Array(12).fill(0).map(() => basePrice * (0.8 + Math.random() * 0.4)),
+          data: Array(12).fill(0).map(() => basePriceCLP * (0.8 + Math.random() * 0.4)),
           color: (opacity = 1) => `rgba(108, 8, 221, ${opacity})`,
           strokeWidth: 2,
         },
@@ -261,12 +276,12 @@ export default function CardDetailScreen() {
       type: apiCard.types[0] || "Unknown",
       artist: apiCard.artist,
       imageUri: apiCard.images.large || apiCard.images.small,
-      marketPrice: apiCard.price.toLocaleString(),
-      recentPrice: (apiCard.price * 0.95).toLocaleString(),
-      highPrice: (apiCard.price * 1.2).toLocaleString(),
-      lowPrice: (apiCard.price * 0.8).toLocaleString(),
+      marketPrice: basePriceCLP,
+      recentPrice: Math.round(basePriceCLP * 0.95),
+      highPrice: Math.round(basePriceCLP * 1.2),
+      lowPrice: Math.round(basePriceCLP * 0.8),
       totalListings: apiCard.stock_quantity || 0,
-      avgSalesPrice: (apiCard.price * 1.05).toLocaleString(),
+      avgSalesPrice: Math.round(basePriceCLP * 1.05),
       totalSales: Math.floor(Math.random() * 100),
       avgDailySales: Math.floor(Math.random() * 10),
       priceHistory,
@@ -302,11 +317,6 @@ export default function CardDetailScreen() {
     return Array(5)
       .fill(0)
       .map((_, index) => index < activeIndex)
-  }
-
-  // Format price with commas
-  const formatPrice = (price: string) => {
-    return price.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
   }
 
   // Loading state
@@ -363,9 +373,13 @@ export default function CardDetailScreen() {
           <Text style={styles.cardTitle}>{cardDetails.fullName}</Text>
         </View>
 
-        {/* Card Image */}
+        {/* Card Image - Optimizado para mobile */}
         <View style={styles.cardImageContainer}>
-          <Image source={{ uri: cardDetails.imageUri }} style={styles.cardImage} resizeMode="contain" />
+          <Image 
+            source={{ uri: cardDetails.imageUri }} 
+            style={styles.cardImage} 
+            resizeMode="contain"
+          />
         </View>
 
         {/* Product Details */}
@@ -403,25 +417,9 @@ export default function CardDetailScreen() {
           </View>
         </View>
 
-        {/* Attacks Section (if available) */}
-        {cardDetails.attacks && cardDetails.attacks.length > 0 && (
-          <View style={styles.detailsSection}>
-            <Text style={styles.sectionTitle}>Ataques</Text>
-            <View style={styles.attacksContainer}>
-              {cardDetails.attacks.map((attack, index) => (
-                <View key={index} style={styles.attackItem}>
-                  <View style={styles.attackHeader}>
-                    <Text style={styles.attackName}>{attack.name}</Text>
-                    <Text style={styles.attackDamage}>{attack.damage}</Text>
-                  </View>
-                  <Text style={styles.attackText}>{attack.text}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
+        
 
-        {/* Price Points */}
+        {/* Price Points - Actualizado con precios en CLP */}
         <View style={styles.priceSection}>
           <View style={styles.priceSectionHeader}>
             <Text style={styles.sectionTitle}>Puntos de precio</Text>
@@ -434,7 +432,7 @@ export default function CardDetailScreen() {
           <View style={styles.priceStatsContainer}>
             <View style={styles.priceMainStat}>
               <Text style={styles.priceLabel}>Precio de mercado</Text>
-              <Text style={styles.priceValue}>$ {formatPrice(cardDetails.marketPrice)} CLP</Text>
+              <Text style={styles.priceValue}>$ {formatCLPPrice(cardDetails.marketPrice)} CLP</Text>
               <View style={styles.priceChangeContainer}>
                 <Feather
                   name={Number(cardDetails.priceChange) >= 0 ? "arrow-up" : "arrow-down"}
@@ -450,17 +448,17 @@ export default function CardDetailScreen() {
             <View style={styles.priceStatsGrid}>
               <View style={styles.priceStat}>
                 <Text style={styles.priceStatLabel}>Venta reciente</Text>
-                <Text style={styles.priceStatValue}>$ {formatPrice(cardDetails.recentPrice)}</Text>
+                <Text style={styles.priceStatValue}>$ {formatCLPPrice(cardDetails.recentPrice)}</Text>
               </View>
 
               <View style={styles.priceStat}>
                 <Text style={styles.priceStatLabel}>Precio más alto</Text>
-                <Text style={styles.priceStatValue}>$ {formatPrice(cardDetails.highPrice)}</Text>
+                <Text style={styles.priceStatValue}>$ {formatCLPPrice(cardDetails.highPrice)}</Text>
               </View>
 
               <View style={styles.priceStat}>
                 <Text style={styles.priceStatLabel}>Precio más bajo</Text>
-                <Text style={styles.priceStatValue}>$ {formatPrice(cardDetails.lowPrice)}</Text>
+                <Text style={styles.priceStatValue}>$ {formatCLPPrice(cardDetails.lowPrice)}</Text>
               </View>
 
               <View style={styles.priceStat}>
@@ -519,7 +517,7 @@ export default function CardDetailScreen() {
               <View style={styles.summaryIconContainer}>
                 <Feather name="trending-up" size={20} color="#6c08dd" />
               </View>
-              <Text style={styles.summaryValue}>$ {formatPrice(cardDetails.highPrice)}</Text>
+              <Text style={styles.summaryValue}>$ {formatCLPPrice(cardDetails.highPrice)}</Text>
               <Text style={styles.summaryLabel}>Precio de venta alto</Text>
             </View>
 
@@ -535,7 +533,7 @@ export default function CardDetailScreen() {
               <View style={styles.summaryIconContainer}>
                 <Feather name="dollar-sign" size={20} color="#6c08dd" />
               </View>
-              <Text style={styles.summaryValue}>$ {formatPrice(cardDetails.avgSalesPrice)}</Text>
+              <Text style={styles.summaryValue}>$ {formatCLPPrice(cardDetails.avgSalesPrice)}</Text>
               <Text style={styles.summaryLabel}>Precio promedio</Text>
             </View>
 
@@ -568,7 +566,7 @@ export default function CardDetailScreen() {
               <Image source={{ uri: listing.imageUri }} style={styles.listingImage} />
               <View style={styles.listingDetails}>
                 <View style={styles.listingHeader}>
-                  <Text style={styles.listingPrice}>$ {formatPrice(listing.price)} CLP</Text>
+                  <Text style={styles.listingPrice}>$ {formatCLPPrice(listing.price)} CLP</Text>
                   <View style={styles.conditionBadge}>
                     <Text style={styles.conditionText}>{listing.condition}</Text>
                   </View>
@@ -722,13 +720,24 @@ const styles = StyleSheet.create({
   cardImageContainer: {
     backgroundColor: "#fff",
     paddingVertical: 20,
+    paddingHorizontal: 16,
     alignItems: "center",
     marginBottom: 16,
   },
   cardImage: {
-    width: width * 0.7,
-    height: width * 0.9,
+    width: Math.min(width * 0.6, 280), // Máximo 280px de ancho
+    height: Math.min(width * 0.84, 392), // Mantiene proporción de carta estándar
+    maxWidth: 280,
+    maxHeight: 392,
     borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
   detailsSection: {
     backgroundColor: "#fff",

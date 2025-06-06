@@ -19,6 +19,25 @@ import NavigationDrawer from "../../components/NavigationDrawer"
 
 const { width } = Dimensions.get("window")
 
+// Tasa de cambio estática USD a CLP
+const USD_TO_CLP_RATE = 950 // Actualizar según sea necesario
+
+// Función para convertir USD a CLP
+const convertUSDToCLP = (usdAmount: number): number => {
+  if (typeof usdAmount !== "number" || isNaN(usdAmount) || usdAmount < 0) {
+    return 100 // Precio mínimo en CLP
+  }
+  return Math.round(usdAmount * USD_TO_CLP_RATE)
+}
+
+// Función para formatear precios en CLP
+const formatCLPPrice = (clpAmount: number): string => {
+  if (typeof clpAmount !== "number" || isNaN(clpAmount)) {
+    return "0"
+  }
+  return clpAmount.toLocaleString("es-CL")
+}
+
 // API Card interface based on your endpoint structure
 interface ApiCard {
   _id: string
@@ -29,7 +48,8 @@ interface ApiCard {
   hp: string
   types: string[]
   rarity: string
-  setInfo: {
+  setInfo?: {
+    // 🔧 Hacer opcional
     name: string
     series: string
   }
@@ -44,7 +64,7 @@ interface ApiCard {
   condition: string
 }
 
-// Transformed card interface for UI
+// Transformed card interface for UI - Actualizado con precios en CLP
 interface Card {
   id: string
   name: string
@@ -52,8 +72,8 @@ interface Card {
   rarity: string
   number: string
   listingCount: number
-  price: string
-  marketPrice: string
+  price: number // Ahora en CLP
+  marketPrice: number // Ahora en CLP
   imageUri: string
   hp: string
   types: string[]
@@ -62,13 +82,13 @@ interface Card {
   isAvailable: boolean
 }
 
-// Available filters - you can expand these based on your API data
+// Available filters - Actualizado con rangos de precios en CLP
 const AVAILABLE_FILTERS = {
   categories: ["Pokémon", "Magic", "Yu-Gi-Oh", "Digimon", "One Piece"],
   sets: [] as string[], // Will be populated from API data
   rarities: [] as string[], // Will be populated from API data
   conditions: ["Mint", "Near Mint", "Excellent", "Good", "Played", "Poor"],
-  priceRanges: ["0-1000", "1000-5000", "5000-10000", "10000-50000", "50000+"],
+  priceRanges: ["0-950", "950-4750", "4750-9500", "9500-47500", "47500+"], // Rangos en CLP
   types: [] as string[], // Will be populated from API data
 }
 
@@ -140,29 +160,66 @@ export default function SearchResultsScreen() {
     types: string[]
   }>(AVAILABLE_FILTERS)
 
-  // Transform API card data to UI format
-  const transformCard = (apiCard: ApiCard): Card => ({
-    id: apiCard._id,
-    name: apiCard.name,
-    set: `${apiCard.setInfo.name} (${apiCard.setInfo.series})`,
-    rarity: apiCard.rarity,
-    number: `#${apiCard.number}`,
-    listingCount: apiCard.stock_quantity,
-    price: apiCard.price.toLocaleString(),
-    marketPrice: (apiCard.price * 1.2).toLocaleString(), // Assuming 20% markup for market price
-    imageUri: apiCard.images.small,
-    hp: apiCard.hp,
-    types: apiCard.types,
-    supertype: apiCard.supertype,
-    condition: apiCard.condition,
-    isAvailable: apiCard.is_available,
-  })
+  // 🔧 FUNCIÓN CORREGIDA: Transform API card data to UI format con validaciones
+  const transformCard = (apiCard: ApiCard): Card => {
+    // Validar precio
+    let usdPrice = 0
+    if (typeof apiCard.price === "number" && !isNaN(apiCard.price)) {
+      usdPrice = apiCard.price
+    } else if (typeof apiCard.price === "string") {
+      const parsedPrice = Number.parseFloat(apiCard.price)
+      usdPrice = !isNaN(parsedPrice) ? parsedPrice : 0
+    }
+
+    const priceCLP = convertUSDToCLP(usdPrice)
+    const marketPriceCLP = convertUSDToCLP(usdPrice * 1.2) // Assuming 20% markup for market price
+
+    // 🔧 VALIDAR setInfo antes de acceder a sus propiedades
+    let setName = "Set desconocido"
+    if (apiCard.setInfo && apiCard.setInfo.name) {
+      setName = apiCard.setInfo.series ? `${apiCard.setInfo.name} (${apiCard.setInfo.series})` : apiCard.setInfo.name
+    }
+
+    // 🔧 VALIDAR otras propiedades que podrían ser undefined
+    const cardName = apiCard.name || "Carta sin nombre"
+    const cardRarity = apiCard.rarity || "Common"
+    const cardNumber = apiCard.number ? `#${apiCard.number}` : "#000"
+    const cardHp = apiCard.hp || ""
+    const cardTypes = Array.isArray(apiCard.types) ? apiCard.types : []
+    const cardSupertype = apiCard.supertype || "Unknown"
+    const cardCondition = apiCard.condition || "Near Mint"
+    const cardImageUri = apiCard.images?.small || apiCard.images?.large || "https://images.pokemontcg.io/sv4pt5/1.png"
+    const stockQuantity = typeof apiCard.stock_quantity === "number" ? apiCard.stock_quantity : 0
+    const isAvailable = typeof apiCard.is_available === "boolean" ? apiCard.is_available : false
+
+    console.log(`💰 SEARCH_PRICE_CONVERSION: ${cardName}`)
+    console.log(`   USD: $${usdPrice.toFixed(2)} -> CLP: $${priceCLP.toLocaleString("es-CL")}`)
+
+    return {
+      id: apiCard._id,
+      name: cardName,
+      set: setName,
+      rarity: cardRarity,
+      number: cardNumber,
+      listingCount: stockQuantity,
+      price: priceCLP,
+      marketPrice: marketPriceCLP,
+      imageUri: cardImageUri,
+      hp: cardHp,
+      types: cardTypes,
+      supertype: cardSupertype,
+      condition: cardCondition,
+      isAvailable: isAvailable,
+    }
+  }
 
   // Fetch cards from API
   const fetchCards = async () => {
     try {
       setLoading(true)
       setError(null)
+
+      console.log("🔍 SEARCH: Iniciando carga de productos...")
 
       const response = await fetch("http://localhost:3000/products")
 
@@ -171,14 +228,43 @@ export default function SearchResultsScreen() {
       }
 
       const apiCards: ApiCard[] = await response.json()
-      const transformedCards = apiCards.map(transformCard)
+      console.log(`📦 SEARCH: ${apiCards.length} productos recibidos de la API`)
+
+      // 🔧 TRANSFORMAR CON MANEJO DE ERRORES
+      const transformedCards: Card[] = []
+      const failedTransformations: string[] = []
+
+      apiCards.forEach((apiCard, index) => {
+        try {
+          const transformedCard = transformCard(apiCard)
+          transformedCards.push(transformedCard)
+        } catch (err) {
+          console.error(`❌ SEARCH: Error transformando carta ${index}:`, err)
+          console.error(`   Carta problemática:`, apiCard)
+          failedTransformations.push(apiCard._id || `index-${index}`)
+        }
+      })
+
+      console.log(`✅ SEARCH: ${transformedCards.length} cartas transformadas exitosamente`)
+      if (failedTransformations.length > 0) {
+        console.warn(
+          `⚠️ SEARCH: ${failedTransformations.length} cartas fallaron en la transformación:`,
+          failedTransformations,
+        )
+      }
 
       setCards(transformedCards)
 
-      // Extract unique values for filters
-      const uniqueSets = [...new Set(apiCards.map((card) => card.setInfo.name))]
-      const uniqueRarities = [...new Set(apiCards.map((card) => card.rarity))]
-      const uniqueTypes = [...new Set(apiCards.flatMap((card) => card.types))]
+      // Extract unique values for filters - con validaciones
+      const uniqueSets = [
+        ...new Set(apiCards.filter((card) => card.setInfo && card.setInfo.name).map((card) => card.setInfo!.name)),
+      ]
+
+      const uniqueRarities = [...new Set(apiCards.filter((card) => card.rarity).map((card) => card.rarity))]
+
+      const uniqueTypes = [
+        ...new Set(apiCards.filter((card) => Array.isArray(card.types)).flatMap((card) => card.types)),
+      ]
 
       setAvailableFilters((prev) => ({
         ...prev,
@@ -189,7 +275,7 @@ export default function SearchResultsScreen() {
 
       console.log("📦 SEARCH: Sets disponibles:", uniqueSets.slice(0, 10), "... (total:", uniqueSets.length, ")")
     } catch (err) {
-      console.error("Error fetching cards:", err)
+      console.error("❌ SEARCH: Error fetching cards:", err)
       setError(err instanceof Error ? err.message : "Error desconocido al cargar las cartas")
     } finally {
       setLoading(false)
@@ -257,7 +343,7 @@ export default function SearchResultsScreen() {
     fetchCards()
   }, [])
 
-  // Apply filters and sorting
+  // Apply filters and sorting - Actualizado para precios en CLP
   useEffect(() => {
     let filtered = [...cards]
 
@@ -337,14 +423,14 @@ export default function SearchResultsScreen() {
       console.log(`🔍 SEARCH: Después de filtro de tipos: ${filtered.length} cartas`)
     }
 
-    // Apply price range filters
+    // Apply price range filters - Actualizado para CLP
     if (selectedFilters.priceRanges.length > 0) {
       filtered = filtered.filter((card) => {
-        const price = Number.parseInt(card.price.replace(/\./g, "").replace(/,/g, ""))
+        const price = card.price // Ya está en CLP
         return selectedFilters.priceRanges.some((range) => {
           const parts = range.split("-")
-          const min = Number.parseInt(parts[0]?.replace(/\./g, "") || "0")
-          const max = parts[1] ? Number.parseInt(parts[1].replace(/\./g, "")) : null
+          const min = Number.parseInt(parts[0] || "0")
+          const max = parts[1] ? Number.parseInt(parts[1]) : null
           if (max) {
             return price >= min && price <= max
           } else {
@@ -355,17 +441,13 @@ export default function SearchResultsScreen() {
       console.log(`🔍 SEARCH: Después de filtro de precio: ${filtered.length} cartas`)
     }
 
-    // Apply sorting
+    // Apply sorting - Actualizado para precios en CLP
     switch (selectedSort) {
       case "price_asc":
-        filtered.sort(
-          (a, b) => Number.parseInt(a.price.replace(/\D/g, "")) - Number.parseInt(b.price.replace(/\D/g, "")),
-        )
+        filtered.sort((a, b) => a.price - b.price)
         break
       case "price_desc":
-        filtered.sort(
-          (a, b) => Number.parseInt(b.price.replace(/\D/g, "")) - Number.parseInt(a.price.replace(/\D/g, "")),
-        )
+        filtered.sort((a, b) => b.price - a.price)
         break
       case "name_asc":
         filtered.sort((a, b) => a.name.localeCompare(b.name))
@@ -575,7 +657,7 @@ export default function SearchResultsScreen() {
           </View>
         </View>
 
-        {/* Card Listings */}
+        {/* Card Listings - Actualizado con precios en CLP */}
         {filteredCards.map((card) => (
           <TouchableOpacity
             key={`card-${card.id}`}
@@ -602,9 +684,9 @@ export default function SearchResultsScreen() {
               <Text style={styles.cardListingCount}>
                 {card.listingCount} {card.isAvailable ? "disponible" : "agotado"}
               </Text>
-              <Text style={styles.cardPrice}>$ {card.price} CLP</Text>
+              <Text style={styles.cardPrice}>$ {formatCLPPrice(card.price)} CLP</Text>
               <Text style={styles.cardMarketPrice}>Precio de mercado:</Text>
-              <Text style={styles.cardMarketPriceValue}>$ {card.marketPrice} CLP</Text>
+              <Text style={styles.cardMarketPriceValue}>$ {formatCLPPrice(card.marketPrice)} CLP</Text>
               <Text style={styles.cardCondition}>Estado: {card.condition}</Text>
             </View>
           </TouchableOpacity>
@@ -764,7 +846,7 @@ export default function SearchResultsScreen() {
                 </View>
               </View>
 
-              {/* Price Ranges */}
+              {/* Price Ranges - Actualizado con rangos en CLP */}
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Rango de Precio</Text>
                 <View style={styles.filterOptions}>
@@ -783,7 +865,7 @@ export default function SearchResultsScreen() {
                           selectedFilters.priceRanges.includes(range) && styles.filterOptionTextSelected,
                         ]}
                       >
-                        {range} CLP
+                        {range.replace(/(\d+)/g, (match) => formatCLPPrice(Number.parseInt(match)))} CLP
                       </Text>
                     </TouchableOpacity>
                   ))}

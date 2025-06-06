@@ -19,14 +19,22 @@ export interface Collection {
   createdAt?: string
 }
 
+// Interface para el usuario con campos adicionales
+export interface User {
+  _id: string
+  username: string
+  name: string
+  email: string
+  location?: string
+  nationality?: string
+  img_url?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
 // Estado del store
 interface UserState {
-  currentUser: {
-    _id: string
-    username: string
-    name: string
-    email: string
-  }
+  currentUser: User
   collections: Collection[]
   loading: boolean
   error: string | null
@@ -39,6 +47,9 @@ const initialState: UserState = {
     username: "chaol",
     name: "asdasd",
     email: "asdasd@gmail.com",
+    location: "",
+    nationality: "",
+    img_url: "",
   },
   collections: [],
   loading: false,
@@ -99,6 +110,56 @@ class UserStore {
   // Obtener el ID del usuario actual
   getCurrentUserId(): string {
     return this.state.currentUser._id
+  }
+
+  // Actualizar datos del usuario
+  updateUser(userData: Partial<User>): void {
+    console.log("🔄 USER_STORE: Actualizando usuario con:", userData)
+
+    // Actualizar el estado con los nuevos datos
+    this.state.currentUser = {
+      ...this.state.currentUser,
+      ...userData,
+    }
+
+    console.log("✅ USER_STORE: Usuario actualizado:", this.state.currentUser)
+    this.notifyListeners()
+  }
+
+  // Cargar datos completos del usuario
+  async loadUserProfile(): Promise<void> {
+    try {
+      this.setLoading(true)
+      this.setError(null)
+
+      const userId = this.getCurrentUserId()
+      console.log(`🔍 STORE: Cargando perfil del usuario: ${userId}`)
+
+      // Llamada a tu endpoint real
+      const response = await fetch(`http://localhost:3000/users/${userId}`)
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.error("❌ STORE: Error response:", errorData)
+        throw new Error(`Error ${response.status}: ${errorData}`)
+      }
+
+      const userData: User = await response.json()
+      console.log("✅ STORE: Datos del usuario cargados:", userData)
+
+      // Actualizar el estado
+      this.state.currentUser = userData
+      this.notifyListeners()
+
+      return userData
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Error al cargar el perfil"
+      this.setError(errorMsg)
+      console.error("❌ STORE: Error cargando perfil:", err)
+      throw new Error(errorMsg)
+    } finally {
+      this.setLoading(false)
+    }
   }
 
   // Obtener todas las collections
@@ -244,31 +305,94 @@ class UserStore {
     }
   }
 
-  // Eliminar collection
+  // 🔧 MÉTODO MEJORADO: Eliminar collection con mejor debugging
   async deleteCollection(collectionId: string): Promise<void> {
     try {
-      console.log(`🗑️ STORE: Eliminando collection: ${collectionId}`)
+      console.log(`🗑️ STORE: === INICIANDO ELIMINACIÓN DE COLLECTION ===`)
+      console.log(`🗑️ STORE: Collection ID: ${collectionId}`)
+      console.log(`🗑️ STORE: Collections actuales en store: ${this.state.collections.length}`)
 
-      // Llamada a tu endpoint para eliminar collection
-      const response = await fetch(`http://localhost:3000/collections/${collectionId}`, {
-        method: "DELETE",
-      })
-
-      if (!response.ok) {
-        const errorData = await response.text()
-        console.error("❌ STORE: Error response:", errorData)
-        throw new Error(`Error ${response.status}: ${errorData}`)
+      // Verificar que la collection existe en el store local
+      const collectionToDelete = this.state.collections.find((c) => c._id === collectionId)
+      if (!collectionToDelete) {
+        console.error(`❌ STORE: Collection ${collectionId} no encontrada en store local`)
+        throw new Error("Collection no encontrada")
       }
 
-      console.log(`✅ STORE: Collection ${collectionId} eliminada`)
+      console.log(`🔍 STORE: Collection encontrada: "${collectionToDelete.name}"`)
 
-      // Actualizar el estado
+      // Construir URL del endpoint
+      const url = `http://localhost:3000/collections/${collectionId}`
+      console.log(`🌐 STORE: URL del endpoint: ${url}`)
+      console.log(`📤 STORE: Método: DELETE`)
+
+      // Realizar la llamada al backend
+      console.log(`📡 STORE: Enviando request DELETE...`)
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      })
+
+      console.log(`📡 STORE: Response recibida:`)
+      console.log(`   Status: ${response.status}`)
+      console.log(`   Status Text: ${response.statusText}`)
+      console.log(`   OK: ${response.ok}`)
+      console.log(`   Headers:`, Object.fromEntries(response.headers.entries()))
+
+      // Leer el cuerpo de la respuesta
+      let responseText = ""
+      let responseData = null
+
+      try {
+        responseText = await response.text()
+        console.log(`📄 STORE: Response body (raw):`, responseText)
+
+        if (responseText.trim()) {
+          responseData = JSON.parse(responseText)
+          console.log(`📄 STORE: Response body (parsed):`, responseData)
+        }
+      } catch (parseError) {
+        console.warn(`⚠️ STORE: No se pudo parsear respuesta como JSON:`, parseError)
+      }
+
+      // Verificar si la respuesta fue exitosa
+      if (!response.ok) {
+        let errorMessage = `Error ${response.status}: ${response.statusText}`
+        if (responseData && responseData.message) {
+          errorMessage = responseData.message
+        } else if (responseText) {
+          errorMessage = responseText
+        }
+
+        console.error(`❌ STORE: Error del servidor: ${errorMessage}`)
+        throw new Error(errorMessage)
+      }
+
+      // Si llegamos aquí, la eliminación fue exitosa
+      console.log(`✅ STORE: Collection ${collectionId} eliminada exitosamente del servidor`)
+
+      // Actualizar el estado local
+      const collectionsBeforeUpdate = this.state.collections.length
       this.state.collections = this.state.collections.filter((c) => c._id !== collectionId)
+      const collectionsAfterUpdate = this.state.collections.length
+
+      console.log(`🔄 STORE: Estado local actualizado:`)
+      console.log(`   Collections antes: ${collectionsBeforeUpdate}`)
+      console.log(`   Collections después: ${collectionsAfterUpdate}`)
+      console.log(`   Collections eliminadas: ${collectionsBeforeUpdate - collectionsAfterUpdate}`)
+
+      // Notificar a los listeners
       this.notifyListeners()
+      console.log(`✅ STORE: === ELIMINACIÓN COMPLETADA EXITOSAMENTE ===`)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Error al eliminar collection"
       this.setError(errorMsg)
+      console.error("❌ STORE: === ERROR EN ELIMINACIÓN ===")
       console.error("❌ STORE: Error eliminando collection:", err)
+      console.error("❌ STORE: Stack trace:", err instanceof Error ? err.stack : "No stack trace")
       throw new Error(errorMsg)
     }
   }
@@ -306,29 +430,95 @@ class UserStore {
     }
   }
 
-  // Remover carta de collection
+  // 🔧 MÉTODO CORREGIDO: Remover carta de collection
   async removeCardFromCollection(collectionId: string, cardId: string): Promise<void> {
     try {
       console.log(`➖ STORE: Removiendo carta ${cardId} de collection ${collectionId}`)
+      console.log(`🔍 STORE: Estado actual antes de eliminar:`)
+      console.log(`   Collections en store: ${this.state.collections.length}`)
 
-      // Llamada a tu endpoint para remover carta
-      const response = await fetch(`http://localhost:3000/collections/${collectionId}/remove`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cardId }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.text()
-        console.error("❌ STORE: Error response:", errorData)
-        throw new Error(`Error ${response.status}: ${errorData}`)
+      const targetCollection = this.state.collections.find((c) => c._id === collectionId)
+      if (targetCollection) {
+        console.log(`   Collection encontrada: ${targetCollection.name}`)
+        console.log(`   Cards en collection: ${targetCollection.cards?.length || 0}`)
+        console.log(`   Card count: ${targetCollection.card_count}`)
+      } else {
+        console.warn(`⚠️ STORE: Collection ${collectionId} no encontrada en store local`)
       }
 
-      const updatedCollection: Collection = await response.json()
-      console.log(`✅ STORE: Carta ${cardId} removida. Nuevo card_count: ${updatedCollection.card_count}`)
+      // 🔧 USAR EL NUEVO ENDPOINT CON PARÁMETROS DE RUTA
+      const url = `http://localhost:3000/collections/${collectionId}/remove/${cardId}`
+      console.log(`🌐 STORE: Llamando endpoint: ${url}`)
+      console.log(`📤 STORE: Method: DELETE`)
+      console.log(`📤 STORE: Headers: Accept: application/json`)
 
-      // Actualizar el estado
-      this.state.collections = this.state.collections.map((c) => (c._id === collectionId ? updatedCollection : c))
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      })
+
+      console.log(`📡 STORE: Response recibida:`)
+      console.log(`   Status: ${response.status}`)
+      console.log(`   Status Text: ${response.statusText}`)
+      console.log(`   OK: ${response.ok}`)
+      console.log(`   Headers:`, Object.fromEntries(response.headers.entries()))
+
+      // Leer respuesta completa
+      let responseText = ""
+      let responseData = null
+
+      try {
+        responseText = await response.text()
+        console.log(`📄 STORE: Response body (raw):`, responseText)
+
+        if (responseText.trim()) {
+          responseData = JSON.parse(responseText)
+          console.log(`📄 STORE: Response body (parsed):`, responseData)
+        }
+      } catch (parseError) {
+        console.warn(`⚠️ STORE: No se pudo parsear respuesta:`, parseError)
+      }
+
+      if (!response.ok) {
+        let errorMessage = `Error ${response.status}: ${response.statusText}`
+        if (responseData && responseData.message) {
+          errorMessage = responseData.message
+        } else if (responseText) {
+          errorMessage = responseText
+        }
+
+        console.error(`❌ STORE: Error del servidor: ${errorMessage}`)
+        throw new Error(errorMessage)
+      }
+
+      // Si la respuesta es exitosa, actualizar el estado local
+      console.log(`✅ STORE: Carta ${cardId} removida exitosamente del servidor`)
+
+      // Actualizar el estado local
+      const updatedCollections = this.state.collections.map((c) => {
+        if (c._id === collectionId) {
+          const updatedCards = c.cards.filter((card) => card.product_id !== cardId)
+          const updatedCollection = {
+            ...c,
+            cards: updatedCards,
+            card_count: updatedCards.length,
+          }
+
+          console.log(`🔄 STORE: Collection actualizada localmente:`)
+          console.log(`   Cards antes: ${c.cards.length}`)
+          console.log(`   Cards después: ${updatedCards.length}`)
+          console.log(`   Card count actualizado: ${updatedCollection.card_count}`)
+
+          return updatedCollection
+        }
+        return c
+      })
+
+      this.state.collections = updatedCollections
+      console.log(`✅ STORE: Estado local actualizado`)
 
       this.notifyListeners()
     } catch (err) {
@@ -423,6 +613,8 @@ export const useUserStore = () => {
     collections: state.collections,
     loading: state.loading,
     error: state.error,
+    updateUser: (userData: Partial<User>) => userStore.updateUser(userData),
+    loadUserProfile: () => userStore.loadUserProfile(),
     loadUserCollections: () => userStore.loadUserCollections(),
     createCollection: (name: string, img_url: string) => userStore.createCollection(name, img_url),
     toggleFavorite: (collectionId: string) => userStore.toggleFavorite(collectionId),

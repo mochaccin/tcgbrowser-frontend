@@ -7,9 +7,9 @@ import {
   useFonts,
 } from "@expo-google-fonts/poppins"
 import { Feather } from "@expo/vector-icons"
-import { router } from "expo-router"
+import { router, useFocusEffect } from "expo-router"
 import { StatusBar } from "expo-status-bar"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import {
   ActivityIndicator,
   Dimensions,
@@ -50,7 +50,7 @@ interface PublishedProduct {
 
 export default function ProfileScreen() {
   // Store hook
-  const { currentUser } = useUserStore()
+  const { currentUser, updateUser } = useUserStore()
 
   // Local state
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
@@ -58,6 +58,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [productsCount, setProductsCount] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
 
   // Load Poppins fonts
   const [fontsLoaded] = useFonts({
@@ -68,9 +69,13 @@ export default function ProfileScreen() {
   })
 
   // Cargar datos del usuario
-  const loadUserProfile = async () => {
+  const loadUserProfile = async (showRefreshIndicator = false) => {
     try {
-      setLoading(true)
+      if (showRefreshIndicator) {
+        setRefreshing(true)
+      } else {
+        setLoading(true)
+      }
       setError(null)
 
       const userId = currentUser._id
@@ -87,24 +92,35 @@ export default function ProfileScreen() {
       console.log("✅ PROFILE: Datos del usuario cargados:", userData)
       setUserProfile(userData)
 
+      // Actualizar el store global con los datos más recientes
+      updateUser(userData)
+
       // Cargar productos publicados por el usuario (simulado por ahora)
-      // En el futuro podrías tener un endpoint como /products/user/:userId
       await loadUserProducts(userId)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Error al cargar el perfil"
       console.error("❌ PROFILE: Error cargando perfil:", err)
       setError(errorMsg)
-      Alert.alert("Error", "No se pudo cargar el perfil del usuario")
+      if (!showRefreshIndicator) {
+        Alert.alert("Error", "No se pudo cargar el perfil del usuario")
+      }
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
-  useEffect(() => {
-    if (currentUser._id) {
-      loadUserProfile()
-    }
-  }, [currentUser._id])
+  // Usar useFocusEffect para recargar datos cuando la pantalla recibe foco
+  useFocusEffect(
+    useCallback(() => {
+      console.log("🔄 PROFILE: Pantalla recibió foco, recargando datos...")
+      if (currentUser._id) {
+        // Si ya tenemos datos cargados, usar refresh indicator
+        const showRefresh = userProfile !== null
+        loadUserProfile(showRefresh)
+      }
+    }, [currentUser._id, userProfile !== null])
+  )
 
   // Cargar productos del usuario
   const loadUserProducts = async (userId: string) => {
@@ -160,10 +176,10 @@ export default function ProfileScreen() {
     }
   }
 
-  // Refresh profile data
+  // Refresh profile data manualmente
   const refreshProfile = async () => {
     if (currentUser._id) {
-      await loadUserProfile()
+      await loadUserProfile(true)
     }
   }
 
@@ -224,11 +240,28 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.headerIcon} onPress={navigateToEditProfile}>
             <Feather name="edit-2" size={24} color="black" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIcon} onPress={refreshProfile}>
-            <Feather name="refresh-cw" size={20} color="black" />
+          <TouchableOpacity 
+            style={styles.headerIcon} 
+            onPress={refreshProfile}
+            disabled={refreshing}
+          >
+            <Feather 
+              name="refresh-cw" 
+              size={20} 
+              color={refreshing ? "#ccc" : "black"} 
+              style={refreshing ? { transform: [{ rotate: '180deg' }] } : {}}
+            />
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Refresh Indicator */}
+      {refreshing && (
+        <View style={styles.refreshIndicator}>
+          <ActivityIndicator size="small" color="#6c08dd" />
+          <Text style={styles.refreshText}>Actualizando perfil...</Text>
+        </View>
+      )}
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Profile Image */}
@@ -240,6 +273,7 @@ export default function ProfileScreen() {
                 "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Untitled-uaThW8rED8JCpG84CL2P8zc7QmRKR5.png",
             }}
             style={styles.profileImage}
+            key={userProfile.img_url} // Force re-render when image changes
           />
         </View>
 
@@ -330,6 +364,14 @@ export default function ProfileScreen() {
             <Text style={styles.infoLabel}>ID de usuario:</Text>
             <Text style={styles.infoValue}>{userProfile._id}</Text>
           </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Última actualización:</Text>
+            <Text style={styles.infoValue}>
+              {userProfile.updatedAt
+                ? new Date(userProfile.updatedAt).toLocaleString("es-CL")
+                : "No disponible"}
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -405,6 +447,21 @@ const styles = StyleSheet.create({
   },
   headerIcon: {
     marginLeft: 16,
+  },
+  refreshIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    backgroundColor: "#f0f8ff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  refreshText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: "#6c08dd",
+    fontFamily: "Poppins_400Regular",
   },
   scrollView: {
     flex: 1,

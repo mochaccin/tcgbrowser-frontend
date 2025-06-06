@@ -52,24 +52,14 @@ interface Card {
   name: string
   edition: string
   price: string
+  priceNumeric: number // Para cálculos y filtros en CLP
+  originalPriceUSD: number // Precio original en USD para referencia
   imageUri: string
   hp?: string
   types: string[]
   rarity: string
   condition: string
 }
-
-// Available Pokemon TCG editions
-// const POKEMON_EDITIONS = [
-//   "Todas las ediciones",
-//   "SV: Prismatic Evolutions",
-//   "SWSH: Vivid Voltage",
-//   "SWSH: Battle Styles",
-//   "SWSH: Evolving Skies",
-//   "SWSH: Fusion Strike",
-//   "SV: Paldea Evolved",
-//   "SV: Obsidian Flames",
-// ]
 
 // Filter options
 type SortOption = "name_asc" | "name_desc" | "price_asc" | "price_desc" | "edition_asc"
@@ -79,6 +69,50 @@ interface FilterState {
   sortBy: SortOption
   priceRange: PriceRange
   selectedEditions: string[]
+}
+
+// 🔧 CONFIGURACIÓN DE CONVERSIÓN DE MONEDA (igual que en collection-detail-screen)
+const EXCHANGE_RATE_USD_TO_CLP = 950 // 1 USD = 950 CLP (tasa estática)
+const MIN_PRICE_CLP = 100 // Precio mínimo en CLP
+const MIN_PRICE_CHEAP_CARDS_CLP = 500 // Precio mínimo para cartas muy baratas
+
+/**
+ * Convierte un precio de USD a CLP usando la tasa de cambio estática
+ * @param usdPrice Precio en USD
+ * @returns Precio en CLP redondeado
+ */
+const convertUSDToCLP = (usdPrice: number): number => {
+  // Validar que el precio sea un número válido
+  if (typeof usdPrice !== "number" || isNaN(usdPrice) || usdPrice < 0) {
+    console.warn(`⚠️ PRICE_CONVERSION: Precio USD inválido: ${usdPrice}, usando precio mínimo`)
+    return MIN_PRICE_CLP
+  }
+
+  let clpPrice = usdPrice * EXCHANGE_RATE_USD_TO_CLP
+
+  // Aplicar precios mínimos según el valor original
+  if (usdPrice < 0.1) {
+    // Para cartas muy baratas (menos de $0.10 USD), establecer un precio mínimo más realista
+    clpPrice = Math.max(clpPrice, MIN_PRICE_CHEAP_CARDS_CLP)
+  } else {
+    // Para otras cartas, aplicar precio mínimo general
+    clpPrice = Math.max(clpPrice, MIN_PRICE_CLP)
+  }
+
+  return Math.round(clpPrice)
+}
+
+/**
+ * Formatea un precio en CLP con separadores de miles
+ * @param clpPrice Precio en CLP
+ * @returns String formateado con símbolo de peso chileno
+ */
+const formatCLPPrice = (clpPrice: number): string => {
+  if (typeof clpPrice !== "number" || isNaN(clpPrice)) {
+    return "$0 CLP"
+  }
+
+  return `$${Math.round(clpPrice).toLocaleString("es-CL")} CLP`
 }
 
 export default function AddCardScreen() {
@@ -106,20 +140,45 @@ export default function AddCardScreen() {
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [errorProducts, setErrorProducts] = useState<string | null>(null)
 
-  // Transformar producto de API a formato UI
-  const transformProduct = (apiProduct: ApiProduct): Card => ({
-    id: apiProduct._id,
-    name: apiProduct.name,
-    edition: apiProduct.setInfo
-      ? `${apiProduct.setInfo.name}${apiProduct.setInfo.series ? ` (${apiProduct.setInfo.series})` : ""}`
-      : "Set desconocido",
-    price: `${apiProduct.price.toLocaleString("es-CL")}CLP`,
-    imageUri: apiProduct.images?.small || apiProduct.images?.large || "https://images.pokemontcg.io/sv4pt5/1.png",
-    hp: apiProduct.hp,
-    types: apiProduct.types || [],
-    rarity: apiProduct.rarity || "Common",
-    condition: apiProduct.condition || "Near Mint",
-  })
+  // 🔧 FUNCIÓN ACTUALIZADA: Transformar producto de API a formato UI con conversión CLP
+  const transformProduct = (apiProduct: ApiProduct): Card => {
+    // Asegurar que el precio sea un número válido
+    let usdPrice = 0
+
+    if (typeof apiProduct.price === "number" && !isNaN(apiProduct.price)) {
+      usdPrice = apiProduct.price
+    } else if (typeof apiProduct.price === "string") {
+      const parsedPrice = Number.parseFloat(apiProduct.price)
+      usdPrice = !isNaN(parsedPrice) ? parsedPrice : 0
+    }
+
+    // Asegurar que usdPrice sea un número válido
+    if (typeof usdPrice !== "number" || isNaN(usdPrice) || usdPrice < 0) {
+      usdPrice = 0
+    }
+
+    // Convertir a CLP
+    const clpPrice = convertUSDToCLP(usdPrice)
+
+    console.log(`💰 ADD_CARD_PRICE_CONVERSION: ${apiProduct.name}`)
+    console.log(`   USD: $${usdPrice.toFixed(2)} -> CLP: $${clpPrice.toLocaleString("es-CL")}`)
+
+    return {
+      id: apiProduct._id,
+      name: apiProduct.name,
+      edition: apiProduct.setInfo
+        ? `${apiProduct.setInfo.name}${apiProduct.setInfo.series ? ` (${apiProduct.setInfo.series})` : ""}`
+        : "Set desconocido",
+      price: formatCLPPrice(clpPrice), // ✅ Precio formateado en CLP para mostrar
+      priceNumeric: clpPrice, // ✅ Precio numérico en CLP para cálculos y filtros
+      originalPriceUSD: usdPrice, // ✅ Asegurar que siempre sea un número válido
+      imageUri: apiProduct.images?.small || apiProduct.images?.large || "https://images.pokemontcg.io/sv4pt5/1.png",
+      hp: apiProduct.hp,
+      types: apiProduct.types || [],
+      rarity: apiProduct.rarity || "Common",
+      condition: apiProduct.condition || "Near Mint",
+    }
+  }
 
   // Cargar productos al iniciar
   useEffect(() => {
@@ -175,10 +234,10 @@ export default function AddCardScreen() {
       filtered = filtered.filter((card) => filters.selectedEditions.some((edition) => card.edition.includes(edition)))
     }
 
-    // Apply price range filter
+    // 🔧 FILTRO DE PRECIO ACTUALIZADO: Usar priceNumeric en CLP
     if (filters.priceRange !== "all") {
       filtered = filtered.filter((card) => {
-        const price = Number.parseFloat(card.price.replace("CLP", "").replace(/\./g, "").replace(",", "."))
+        const price = card.priceNumeric // Ya está en CLP
         switch (filters.priceRange) {
           case "0-5000":
             return price <= 5000
@@ -208,7 +267,7 @@ export default function AddCardScreen() {
     setToastVisible(true)
   }
 
-  // Sort cards based on selected option
+  // 🔧 FUNCIÓN DE ORDENAMIENTO ACTUALIZADA: Usar priceNumeric para ordenar por precio
   const sortCards = (cardList: Card[], option: SortOption) => {
     const sorted = [...cardList]
 
@@ -218,17 +277,9 @@ export default function AddCardScreen() {
       case "name_desc":
         return sorted.sort((a, b) => b.name.localeCompare(a.name))
       case "price_asc":
-        return sorted.sort((a, b) => {
-          const priceA = Number.parseFloat(a.price.replace("CLP", "").replace(".", "").replace(",", "."))
-          const priceB = Number.parseFloat(b.price.replace("CLP", "").replace(".", "").replace(",", "."))
-          return priceA - priceB
-        })
+        return sorted.sort((a, b) => a.priceNumeric - b.priceNumeric) // ✅ Usar priceNumeric
       case "price_desc":
-        return sorted.sort((a, b) => {
-          const priceA = Number.parseFloat(a.price.replace("CLP", "").replace(".", "").replace(",", "."))
-          const priceB = Number.parseFloat(b.price.replace("CLP", "").replace(".", "").replace(",", "."))
-          return priceB - priceA
-        })
+        return sorted.sort((a, b) => b.priceNumeric - a.priceNumeric) // ✅ Usar priceNumeric
       case "edition_asc":
         return sorted.sort((a, b) => a.edition.localeCompare(b.edition))
       default:
@@ -238,7 +289,7 @@ export default function AddCardScreen() {
 
   // Add card to collection
   const addCardToCollection = async (cardId: string) => {
-    console.log(`Adding card ${cardId} to collection ${collectionId}`)
+    console.log(`🃏 ADD_CARD: Agregando carta ${cardId} a colección ${collectionId}`)
 
     try {
       // Find the card that was added for the toast notification
@@ -247,6 +298,10 @@ export default function AddCardScreen() {
       // Call the API through the store
       await userStore.addCardToCollection(collectionId as string, cardId)
 
+      // Forzar actualización de colecciones en el store para asegurar datos frescos
+      console.log("🔄 ADD_CARD: Actualizando colecciones en el store...")
+      await userStore.loadUserCollections()
+
       // Show success toast
       if (addedCard) {
         showToast("Carta añadida a la colección", addedCard.name, addedCard.imageUri)
@@ -254,7 +309,7 @@ export default function AddCardScreen() {
         showToast("Carta añadida a la colección")
       }
     } catch (error) {
-      console.error("Error adding card to collection:", error)
+      console.error("❌ ADD_CARD: Error agregando carta:", error)
       showToast("Error al añadir la carta a la colección")
     }
   }
@@ -311,7 +366,13 @@ export default function AddCardScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => {
+            console.log("🔙 ADD_CARD: Volviendo a la pantalla de colección...")
+            router.back()
+          }}
+          style={styles.backButton}
+        >
           <Feather name="arrow-left" size={24} color="black" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Añadir carta a la colección</Text>
@@ -348,7 +409,7 @@ export default function AddCardScreen() {
         <Feather name="search" size={16} color="#999" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Buscar en esta colección"
+          placeholder="Buscar cartas disponibles"
           placeholderTextColor="#999"
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -423,6 +484,13 @@ export default function AddCardScreen() {
           </View>
         )}
 
+        {/* 🔧 INFORMACIÓN DE TASA DE CAMBIO */}
+        <View style={styles.exchangeRateContainer}>
+          <Text style={styles.exchangeRateText}>
+            Tasa de cambio: 1 USD = ${EXCHANGE_RATE_USD_TO_CLP.toLocaleString("es-CL")} CLP
+          </Text>
+        </View>
+
         {/* Cards Grid */}
         <View style={styles.cardsGrid}>
           {filteredCards.map((card) => (
@@ -436,13 +504,16 @@ export default function AddCardScreen() {
                   {card.name}
                 </Text>
                 <Text style={styles.cardEdition}>{card.edition}</Text>
+                {/* ✅ PRECIO EN CLP */}
                 <Text style={styles.cardPrice}>{card.price}</Text>
+                {/* Precio original en USD como referencia */}
+                <Text style={styles.cardPriceUSD}>{`($${(card.originalPriceUSD || 0).toFixed(2)} USD)`}</Text>
               </View>
             </View>
           ))}
         </View>
 
-        {filteredCards.length === 0 && (
+        {filteredCards.length === 0 && !loadingProducts && (
           <View style={styles.noResultsContainer}>
             <Feather name="search" size={48} color="#ccc" />
             <Text style={styles.noResultsText}>No se encontraron cartas</Text>
@@ -502,13 +573,13 @@ export default function AddCardScreen() {
 
                 {/* Price Range */}
                 <View style={styles.filterSection}>
-                  <Text style={styles.filterSectionTitle}>Rango de precio</Text>
+                  <Text style={styles.filterSectionTitle}>Rango de precio (CLP)</Text>
                   {[
                     { key: "all", label: "Todos los precios" },
-                    { key: "0-5000", label: "0 - 5.000 CLP" },
-                    { key: "5000-10000", label: "5.000 - 10.000 CLP" },
-                    { key: "10000-20000", label: "10.000 - 20.000 CLP" },
-                    { key: "20000+", label: "Más de 20.000 CLP" },
+                    { key: "0-5000", label: "$0 - $5.000 CLP" },
+                    { key: "5000-10000", label: "$5.000 - $10.000 CLP" },
+                    { key: "10000-20000", label: "$10.000 - $20.000 CLP" },
+                    { key: "20000+", label: "Más de $20.000 CLP" },
                   ].map((option) => (
                     <TouchableOpacity
                       key={option.key}
@@ -552,52 +623,6 @@ export default function AddCardScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Footer */}
-      <View style={styles.footer}>
-        <View style={styles.socialIcons}>
-          <TouchableOpacity style={styles.footerSocialIcon}>
-            <Feather name="facebook" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.footerSocialIcon}>
-            <Feather name="instagram" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.footerSocialIcon}>
-            <Feather name="twitter" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.footerSocialIcon}>
-            <Feather name="help-circle" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.footerText}>
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam in dui mauris. Vivamus hendrerit arcu sed erat
-          molestie vehicula. Sed auctor neque eu tellus rhoncus ut eleifend nibh porttitor. Ut in nulla enim.
-        </Text>
-
-        <Text style={styles.footerText}>© 2025 Lorem Ipsum Company. Todos los derechos reservados.</Text>
-
-        <Text style={styles.footerText}>
-          Suspendisse in justo eu magna luctus suscipit. Sed lectus. Integer euismod lacus luctus magna. Quisque cursus,
-          metus vitae pharetra auctor, sem massa mattis sem, at interdum magna augue eget diam.
-        </Text>
-
-        <View style={styles.footerLinks}>
-          <TouchableOpacity>
-            <Text style={styles.footerLink}>Política de Privacidad</Text>
-          </TouchableOpacity>
-          <Text style={styles.footerLinkDivider}>|</Text>
-          <TouchableOpacity>
-            <Text style={styles.footerLink}>Términos de Servicio</Text>
-          </TouchableOpacity>
-          <Text style={styles.footerLinkDivider}>|</Text>
-          <TouchableOpacity>
-            <Text style={styles.footerLink}>Accesibilidad</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.footerPrivacyText}>No vender ni compartir mi información personal</Text>
-      </View>
     </SafeAreaView>
   )
 }
@@ -777,6 +802,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "bold",
   },
+  // 🔧 NUEVO ESTILO: Contenedor para mostrar la tasa de cambio
+  exchangeRateContainer: {
+    alignItems: "center",
+    paddingVertical: 8,
+    backgroundColor: "#fff",
+    marginHorizontal: 15,
+    marginBottom: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#dadada",
+  },
+  exchangeRateText: {
+    fontSize: 12,
+    color: "#888",
+    fontStyle: "italic",
+  },
   cardsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -830,6 +871,13 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#6c08dd",
     marginTop: 5,
+  },
+  // 🔧 NUEVO ESTILO: Precio en USD como referencia
+  cardPriceUSD: {
+    fontSize: 10,
+    color: "#999",
+    fontStyle: "italic",
+    marginTop: 2,
   },
   noResultsContainer: {
     alignItems: "center",
